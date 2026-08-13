@@ -75,18 +75,48 @@ Three modules — <https://www.designtokens.org/TR/2025.10/>:
 >
 > **Cite and implement `www.designtokens.org/TR/2025.10/…`.**
 
-**The single structural rule:** an object with a `$value` property **is a token**; an object without one **is a group**. That is the whole discriminator.
+**The single structural rule:** an object with a `$value` property **is a token**; an object without one **is a group**. An object that is both is an error. Names may not begin with `$` or contain `{`, `}` or `.`.
+
+**`$type` is never inferred from the value.** It is explicit, inherited from the nearest parent group, or taken from an alias target. Otherwise the token is invalid.
+
+### The 2025.10 breaking change: several values are objects, not strings
+
+This is the thing most tools and most guidance still get wrong. In 2025.10:
+
+| Type | Value shape |
+|---|---|
+| `color` | `{ colorSpace, components, alpha?, hex? }` — `hex` is an optional **6-digit fallback**, not the value |
+| `dimension` | `{ value, unit }` — unit required even when value is `0` |
+| `duration` | `{ value, unit }` |
+
+Components are **0–1**, not 0–255. Fourteen colour spaces are supported (`srgb`, `oklch`, `display-p3`, `lab`, `rec2020`, …).
 
 ```json
 {
   "$description": "Naming contract: JSON path a.b.c maps to CSS custom property --a-b-c.",
-  "color": {
-    "$type": "color",
-    "slate": { "500": { "$value": "#707980", "$description": "Control borders. Meets 3:1." } },
-    "border": { "control": { "$value": "{color.slate.500}" } }
+  "brand": {
+    "color": {
+      "$type": "color",
+      "border": {
+        "$value": { "colorSpace": "srgb", "components": [0.439, 0.475, 0.502], "hex": "#707980" },
+        "$description": "Control borders. Meets 3:1."
+      },
+      "focus": { "$value": "{brand.color.border}" }
+    },
+    "space": { "2": { "$type": "dimension", "$value": { "value": 0.5, "unit": "rem" } } }
   }
 }
 ```
+
+**Emitting `"$value": "#707980"` is second-editors-draft format, not 2025.10.** A checker that treats an object `$value` as a group will silently skip every colour token in a valid file and report it clean — `brandcheck` handles both shapes deliberately.
+
+Two reference syntaxes exist: `{group.token}` (resolves to `$value`, tokens only) and `$ref` (a JSON Pointer, property-level, newest and least implemented).
+
+### Adoption reality — verify, do not assume
+
+"Supports DTCG" usually means draft-era support. As of 2026-08-13: **Style Dictionary 5.5.1 states outright that 2025.10 "does not have full support yet… work in progress in v5."** Tokens Studio still defaults to its legacy non-`$` format with DTCG as opt-in, and documents gaps (`shadow` `x`/`y` versus `offsetX`/`offsetY`). Figma's native DTCG export was announced but shipped behaviour is unconfirmed.
+
+**Test any claimed DTCG support by inspecting a real export's colour and dimension values.** If colours come out as hex strings, the tool is emitting the 2022 draft.
 
 **State the naming contract in `$description`.** If a generated file cannot be mechanically mapped back to the authored one, it cannot be diffed, and it will drift.
 

@@ -15,9 +15,9 @@ The conformance gate for a brand system in 2026. Researched 2026-08-13; every cl
 The 2-CSS-pixel-perimeter focus rule belongs to 2.4.13 and is **AAA**. A system claiming AA is obliged only to ensure focus is not entirely hidden by author content — sticky headers, cookie banners, chat widgets. Design a strong focus indicator anyway; just do not cite it as an AA requirement.
 <https://www.w3.org/TR/WCAG22/> · <https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured-minimum.html>
 
-**2. APCA is not the WCAG 3 algorithm and has no normative status.** The current WCAG 3 draft states the contrast algorithm is "yet to be determined" and does not name APCA. Use WCAG 2 ratios as the conformance gate; use APCA only as an advisory tie-breaker. **Never publish APCA numbers as your stated accessibility criteria** — there is no standard to conform to, so an APCA-only palette has no defensible conformance story.
+**2. APCA is not the WCAG 3 algorithm and has no normative status.** The current WCAG 3 draft states the contrast algorithm is "yet to be determined" and does not name APCA. Use WCAG 2 ratios as the conformance gate; use APCA only as an advisory tie-breaker. It is most useful over **dark-theme tokens**, where WCAG 2's `+0.05` flare constant scores near-black backgrounds generously and can wave through a pairing that reads poorly. **Never publish APCA numbers as your stated accessibility criteria** — there is no standard to conform to, so an APCA-only palette has no defensible conformance story.
 
-**3. ADA Title II deadlines moved in April 2026** to **April 26 2027** and **April 26 2028**. Earlier published 2026/2027 dates are stale.
+**3. ADA Title II deadlines moved in April 2026.** A DOJ Interim Final Rule (20 April 2026) extended them by a year to **26 April 2027** (population ≥50,000) and **26 April 2028** (<50,000 and special districts). **The standard it names is WCAG 2.1 AA, not 2.2.** Any guidance citing 2026/2027 dates, or citing 2.2, is stale.
 
 ## The thresholds
 
@@ -30,7 +30,7 @@ The 2-CSS-pixel-perimeter focus rule belongs to 2.4.13 and is **AAA**. A system 
 | 1.4.11 Non-text Contrast | AA | **3:1** |
 | 2.5.8 Target Size (Minimum) | AA | 24×24 CSS px |
 
-**Large text** = 18.66px (14pt) **bold**, or 24px (18pt) at any weight.
+**Large text** = at least 18pt (~24px) at any weight, **or** 14pt (~18.5px) **bold**. The lower threshold applies *only* to bold — 18.5px regular is normal text and needs 4.5:1.
 
 ## The anti-rounding rule — normative, and routinely violated
 
@@ -86,6 +86,12 @@ def ratio(fg, bg):
     return (hi + 0.05) / (lo + 0.05)       # then TRUNCATE, never round up
 ```
 
+## Two criteria that constrain the system structurally
+
+**1.4.1 Use of Color — Level A.** This gates even minimum conformance. The classic failure is removing underlines from links in body copy: hue alone then distinguishes them. Either keep an underline, or provide another non-colour cue. This is also why every status in a system needs a glyph and a word.
+
+**1.4.12 Text Spacing — Level AA.** Content must survive line-height 1.5×, paragraph spacing 2×, letter-spacing 0.12em and word-spacing 0.16em with no loss of content or function. **In practice this prohibits fixed-height text containers.** Any component with a hard `height` around text will clip when a user applies a spacing stylesheet. Use `min-height`.
+
 ## Beyond contrast
 
 - **Never colour alone** (1.4.1). Every status carries a glyph and a word as well as a hue. Differentiate component *classes* by shape too, so they survive greyscale and colour-vision deficiency. Test by rendering the artifact in greyscale.
@@ -96,8 +102,11 @@ def ratio(fg, bg):
 
 ## Why this is not optional
 
-- **EN 301 549** is the EU technical standard; the **European Accessibility Act** applied from **June 2025** to consumer-facing products and services.
-- **ADA Title II** compliance dates: **April 26 2027** and **April 26 2028**.
+- **EN 301 549** is the EU technical standard. The operative version today is **v3.2.1, which requires WCAG 2.1 AA** — not 2.2. A v4.1.1 incorporating WCAG 2.2 is expected around October 2026, but that date is unconfirmed from primary source; do not plan against it.
+- The **European Accessibility Act** applied from **28 June 2025** to consumer-facing products and services. That date has passed.
+- **ADA Title II**: WCAG 2.1 AA, by **26 April 2027** / **26 April 2028**.
+
+**Design to WCAG 2.2 AA anyway.** It is a superset of 2.1 AA, so it satisfies both regimes and survives the EN 301 549 update without rework.
 - Procurement in most large organisations requires a VPAT/ACR. A brand system that cannot state its contrast ratios cannot be assessed, and blocks the sale.
 
 Fixing a palette before it is signed off costs a token edit. Fixing it after launch costs a rebrand.

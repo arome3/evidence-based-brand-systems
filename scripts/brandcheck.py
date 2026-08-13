@@ -228,6 +228,31 @@ def _scoped(css: str, pattern: str) -> Tuple[Dict[str, str], List[Tuple[int, int
         pos = end
 
 
+def _render_value(raw):
+    """Reduce a token value to a comparable string.
+
+    DTCG 2025.10 made several types OBJECTS rather than strings:
+      color     -> {colorSpace, components, alpha?, hex?}
+      dimension -> {value, unit}
+      duration  -> {value, unit}
+    A checker that treats an object $value as a group silently skips every
+    colour token in a valid 2025.10 file, and then reports the file as clean.
+    """
+    if isinstance(raw, dict):
+        if "hex" in raw:
+            return str(raw["hex"])
+        if "colorSpace" in raw and "components" in raw:
+            comps = " ".join(str(c) for c in raw["components"])
+            alpha = f" / {raw['alpha']}" if "alpha" in raw else ""
+            return f"{raw['colorSpace']}({comps}{alpha})"
+        if "value" in raw and "unit" in raw:
+            return f"{raw['value']}{raw['unit']}"
+        return json.dumps(raw, sort_keys=True, separators=(",", ":"))
+    if isinstance(raw, list):
+        return json.dumps(raw, separators=(",", ":"))
+    return str(raw)
+
+
 def _walk_tokens(node, path, flat, dtcg):
     """Collect tokens two ways.
 
@@ -243,13 +268,13 @@ def _walk_tokens(node, path, flat, dtcg):
     for key, val in node.items():
         if key.startswith("$") or not isinstance(val, dict):
             continue
-        raw = val.get("$value", val.get("value"))
-        is_leaf = raw is not None and not isinstance(raw, dict)
-        if is_leaf:
+        has_value = "$value" in val or "value" in val
+        if has_value:
+            rendered = _render_value(val.get("$value", val.get("value")))
             if key.startswith("--"):
-                flat[key] = str(raw)
+                flat[key] = rendered
             else:
-                dtcg[".".join(path + [key])] = str(raw)
+                dtcg[".".join(path + [key])] = rendered
         else:
             _walk_tokens(val, path + [key], flat, dtcg)
 
@@ -393,6 +418,8 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
 
                 def _same(a, b):
                     a, b = " ".join(a.split()), " ".join(b.split())
+                    # A DTCG colour object renders to its hex fallback; a CSS
+                    # token holds the same hex. Those agree.
                     if a.lower() == b.lower():
                         return True
                     try:
