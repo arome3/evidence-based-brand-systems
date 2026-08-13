@@ -37,6 +37,7 @@ Open the artifact. Every item is a thing to *do*, not to reason about.
 - [ ] **Keyboard focus.** Tab to a control and read the computed outline — width, style, colour, offset, and that `:focus-visible` matches.
 - [ ] **Reduced motion.** Confirm the media block exists and lands animations in their finished state.
 - [ ] **Webfonts blocked.** Strip the font families and confirm nothing breaks — including that every glyph the UI depends on exists in the *fallback*.
+- [ ] **Self-contained.** The artifact opens from disk with no build step and no fetches. A webfont `@import` is only convenience **if the faces are also self-hosted with `@font-face`**; with zero `@font-face` blocks the CDN *is* the typography, and the tile silently loses its type on a locked-down enterprise network or in an offline review. Graceful degradation is necessary but not sufficient — a contract developer implementing from the tile inherits the dependency.
 - [ ] **Greyscale.** Every status must remain identifiable without hue.
 - [ ] **Zoom to 200%.** Text reflows, nothing is clipped.
 

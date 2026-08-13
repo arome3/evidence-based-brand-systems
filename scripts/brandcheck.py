@@ -18,6 +18,8 @@ Python 3.9+.
 """
 from __future__ import annotations
 
+__version__ = "1.1.0"
+
 import argparse
 import json
 import os
@@ -326,6 +328,52 @@ def _dtcg_to_css_name(path):
     return "--" + path.replace(".", "-")
 
 
+EXTERNAL_REF = re.compile(
+    r"""<(?:script|link|img|iframe|source|video|audio|embed|object)\b[^>]*?"""
+    r"""\b(?:src|href|data)\s*=\s*["'](?!#|data:)([^"']+)["']""", re.I | re.S)
+FONT_HOST = re.compile(r"fonts\.(?:googleapis|gstatic|bunny)\.(?:com|net)", re.I)
+
+
+def _check_self_contained(name, text, rep):
+    """The artifact must open from disk with no build step and no fetches.
+
+    A style tile that silently depends on a CDN looks fine on the machine that
+    made it and breaks on the client's laptop, in a locked-down enterprise
+    network, or in an air-gapped review. The permitted exception is a webfont
+    import, because the system is required to work without it anyway.
+    """
+    external, fonts = [], []
+    for m in EXTERNAL_REF.finditer(text):
+        url = m.group(1).strip()
+        if url.startswith(("http://", "https://", "//")):
+            (fonts if FONT_HOST.search(url) else external).append(url)
+        elif not url.startswith(("#", "data:", "mailto:", "tel:")):
+            external.append(url)          # a local file is still a dependency
+    for u in re.findall(r"@import\s+url\(\s*['\"]?([^'\")]+)", text):
+        (fonts if FONT_HOST.search(u) else external).append(u)
+    if external:
+        rep.fail(f"{name}: not self-contained — {len(external)} external or local "
+                 f"dependency(ies): {sorted(set(external))[:4]}. The artifact must open "
+                 f"from disk with no build step and no fetches.")
+
+    # A webfont import is only convenience if the fonts are ALSO self-hosted.
+    # With no @font-face, the CDN *is* the typography, and the artifact silently
+    # loses its typefaces on a locked-down network or in an offline review.
+    face_blocks = len(re.findall(r"@font-face\s*\{", text, re.I))
+    if fonts and face_blocks == 0:
+        rep.fail(f"{name}: depends on a webfont CDN for its typography — "
+                 f"{len(fonts)} remote import and zero @font-face blocks. Self-host the "
+                 f"faces (or embed them) so the import is genuinely optional; the system "
+                 f"is required to work without it.")
+    elif not external:
+        detail = (f"; {len(fonts)} webfont import backed by {face_blocks} self-hosted "
+                  f"@font-face block(s)" if fonts else "")
+        rep.ok(f"{name}: self-contained (no external dependencies{detail})")
+    if re.search(r"<img\b", text, re.I):
+        rep.warn(f"{name}: contains <img>. Version one should require no image assets — "
+                 f"they are the first thing to rot and the first thing a licence dispute touches.")
+
+
 def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
     d = args.dir
     css_path = args.css or os.path.join(d, "tokens.css")
@@ -479,6 +527,7 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
                      f"({sorted(set(raws))[:5]}) — component CSS must reference tokens")
         else:
             rep.ok(f"{name}: no raw colour outside token declarations")
+        _check_self_contained(name, text, rep)
 
 
 # ────────────────────────────────────────────────────────────── fonts ──
@@ -597,13 +646,33 @@ PROOF_PATTERNS = [
     (r"\b(?:award[- ]winning|industry[- ]leading|#1\b)", "superlative proof claim"),
 ]
 
-# A line that forbids, negates, or scopes a term is not using it.
+# A line that forbids, negates, restricts or conditions a term is not asserting it.
 NEGATION = re.compile(
     r"\b(?:ban|banned|banning|forbid|forbidden|prohibit|prohibited|never|avoid|avoided|"
-    r"reject|rejected|don'?t|do not|does not|did not|cannot|can'?t|must not|no longer|"
-    r"villain|anti-pattern|antipattern|instead of|rather than|not a |without |absent|"
-    r"refuse|refused|deleted|removed|omit|omitted|unavailable|unearned|fabricat|"
-    r"borrowed authority|misuse|prohibited usage)\b", re.I)
+    r"reject|rejected|don'?t|do not|does not|did not|cannot|can'?t|must not|may not|"
+    r"no longer|none of|not currently|not yet|villain|anti-pattern|antipattern|"
+    r"instead of|rather than|not a |without |absent|refuse|refused|deleted|removed|"
+    r"omit|omitted|unavailable|unearned|fabricat|borrowed authority|misuse|"
+    r"prohibited usage|permitted only|only to|only when|restricted|withheld|held pending|"
+    r"pending|conditions|requires prior|subject to|unless|expires?|lapses?)\b", re.I)
+
+# The check's own bar is "needs a real, dated, verifiable referent". A line that
+# carries a date, an as-of, or an explicit attribution has met that bar; flagging
+# it is noise. Confirmed against real governance documentation where every such
+# line was correct.
+HAS_REFERENT = re.compile(
+    r"\b(19|20)\d{2}-\d{2}-\d{2}\b|\bdated\b|\bas of\b|\bclient-asserted\b|"
+    r"\bper\s+\w+\s+\d{4}\b|\breport\s+dated\b", re.I)
+
+# An explicitly withheld or unfilled value is the opposite of a fabrication.
+WITHHELD = re.compile(
+    r"\[[^\]]*(?:withheld|not supplied|not yet|tbd|pending|placeholder|open|unknown|"
+    r"to be confirmed|redacted)[^\]]*\]", re.I)
+
+# A question about a claim is not the claim.
+INTERROGATIVE = re.compile(
+    r"(?:^|\|)\s*(?:\*\*)?\s*(?:what|which|who|when|where|how|is|are|does|do)\b"
+    r"|\?\s*(?:\*\*)?\s*\|?\s*$", re.I)
 
 # A line carrying a research/evidence label is describing someone else's material.
 RESEARCH_LABEL = re.compile(
@@ -615,10 +684,25 @@ RESEARCH_LABEL = re.compile(
 QUOTED = re.compile(r"[\"\u201c\u2018\u00ab][^\"\u201d\u2019\u00bb]{0,400}?[\"\u201d\u2019\u00bb]|`[^`]{0,200}`")
 
 
-def _suppressed(line: str, span: Tuple[int, int]) -> Optional[str]:
-    """Return why this hit is not a violation, or None if it is one."""
+def _suppressed(line: str, span: Tuple[int, int],
+                context: str = "") -> Optional[str]:
+    """Return why this hit is not a violation, or None if it is one.
+
+    `context` is the surrounding lines. A claim's date or attribution often sits
+    on an adjacent line -- HTML wraps, and a markdown table keeps the date in a
+    different cell -- so a strictly line-based test reports correct governance
+    documentation as suspect. Checked against real regulated-industry brand
+    docs, where every such flag was a false positive.
+    """
+    window = context or line
+    if WITHHELD.search(window):
+        return "explicitly withheld or unfilled"
+    if HAS_REFERENT.search(window):
+        return "carries a date or attribution"
+    if INTERROGATIVE.search(line):
+        return "an open question, not a claim"
     if NEGATION.search(line):
-        return "prohibition or negation"
+        return "prohibition, restriction or condition"
     if RESEARCH_LABEL.search(line):
         return "labelled research observation"
     for q in QUOTED.finditer(line):
@@ -631,7 +715,11 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
                show_all: bool) -> Tuple[int, int, int]:
     words = proofs = suppressed = 0
     in_fence = False
-    for i, line in enumerate(text.splitlines(), 1):
+    all_lines = text.splitlines()
+    for i, line in enumerate(all_lines, 1):
+        # A referent usually FOLLOWS its claim -- a definition list, a table row,
+        # a footnote -- so the forward window is wider than the backward one.
+        window = "\n".join(all_lines[max(0, i - 3):i + 8])
         if line.lstrip().startswith("```"):
             in_fence = not in_fence
             continue
@@ -642,7 +730,7 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
         checks += [(re.compile(pat, re.I), label, False) for pat, label in PROOF_PATTERNS]
         for rx, label, is_word in checks:
             for m in rx.finditer(line):
-                why = _suppressed(line, m.span())
+                why = _suppressed(line, m.span(), window)
                 if why:
                     suppressed += 1
                     if show_all:
@@ -745,6 +833,8 @@ def main() -> int:
     a.add_argument("--show-suppressed", action="store_true")
     a.set_defaults(fn=cmd_all)
 
+    p.add_argument("--version", action="version",
+                   version=f"brandcheck {__version__}")
     args = p.parse_args()
     rep = Report()
     args.fn(args, rep)

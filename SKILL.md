@@ -62,7 +62,7 @@ Not a prohibition list — a contract. The output is these files, and each has r
 | `05-design-system.md` | Foundations · every component with all states, keyboard, screen-reader, misuse · completed self-review checklist |
 | `tokens.css` | Three layers: core → semantic → component. Themes by semantic remap only |
 | `tokens.json` | Generated mirror. Must agree value-for-value |
-| `style-tile.html` | Self-contained, no build, no image assets, both themes, visible focus, reduced-motion, every specified device rendered |
+| `style-tile.html` | Self-contained (fonts self-hosted, not CDN-dependent), no build, no image assets, both themes, visible focus, reduced-motion, every specified device rendered |
 | `pairs.tsv` | Every shipped pairing: `name<TAB>fg<TAB>bg<TAB>threshold` |
 
 Templates for all of these: `templates/`.
