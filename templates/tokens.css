@@ -1,0 +1,117 @@
+/* ============================================================================
+   <BRAND> — Design Tokens
+   Version 1.0 · <DATE>
+   Mirror of tokens.json. Values in the two files must agree; verify with
+   `python3 scripts/brandcheck.py tokens .`
+
+   ARCHITECTURE — three layers. Never skip one in component CSS.
+     1. core       --b-core-*     raw values, named by scale position only
+     2. semantic   --b-color-*    named by role
+     3. component  --b-button-*   named by part
+
+   Component CSS references layers 2 and 3 only. Reaching into layer 1 breaks
+   theming silently, and only in the theme you are not looking at.
+
+   NAMING  --b- <category> - <concept> - <property> - <variant/state>
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- 1. CORE */
+:root {
+  /* Neutral ramp. One ramp can serve both themes if the steps are chosen for it. */
+  --b-core-neutral-0:   #ffffff;
+  --b-core-neutral-100: #______;
+  --b-core-neutral-500: #______;   /* control borders live around here: needs 3:1 */
+  --b-core-neutral-900: #______;
+  --b-core-neutral-950: #______;
+
+  /* Accent. Decide what it MEANS before choosing the hue. Ration its use. */
+  --b-core-accent-500:  #______;   /* dark-theme accent */
+  --b-core-accent-700:  #______;   /* light-theme accent */
+}
+
+/* ----------------------------------------------------- 2. SEMANTIC — LIGHT */
+:root {
+  color-scheme: light;
+
+  --b-color-bg-page:      var(--b-core-neutral-100);
+  --b-color-bg-surface:   var(--b-core-neutral-0);
+  --b-color-text-primary: var(--b-core-neutral-900);
+  --b-color-text-meta:    var(--b-core-neutral-500);
+  /* The ONLY border permitted on an interactive boundary. Must meet 3:1. */
+  --b-color-border-control: var(--b-core-neutral-500);
+  /* Decorative only. Never a component boundary, never the sole carrier of meaning. */
+  --b-color-border-rule:    var(--b-core-neutral-100);
+  --b-color-accent:         var(--b-core-accent-700);
+  --b-color-focus-ring:     var(--b-core-accent-700);
+  --b-color-text-on-accent: var(--b-core-neutral-0);
+}
+
+/* ------------------------------------------------------ 2. SEMANTIC — DARK
+   Ship BOTH blocks with identical values. The :not([data-theme="light"])
+   guard is what lets an explicit light choice beat a dark OS preference. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --b-color-bg-page:      var(--b-core-neutral-950);
+    --b-color-text-primary: var(--b-core-neutral-100);
+    --b-color-accent:       var(--b-core-accent-500);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --b-color-bg-page:      var(--b-core-neutral-950);
+  --b-color-text-primary: var(--b-core-neutral-100);
+  --b-color-accent:       var(--b-core-accent-500);
+}
+
+/* --------------------------------------------------------- 3. TYPOGRAPHY
+   Each role is a QUAD: size, line, weight, tracking — applied together.
+   Responsiveness lives here, not in components. */
+:root {
+  --b-font-sans: "<FAMILY>", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --b-font-mono: "<MONO>", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --b-text-display-size: 2.5rem;
+  --b-text-display-line: 1.05;
+  --b-text-display-weight: 400;
+  --b-text-display-tracking: -0.03em;
+
+  --b-text-body-size: 1rem;
+  --b-text-body-line: 1.6;
+  --b-text-body-weight: 400;
+  --b-text-body-tracking: 0em;
+
+  /* Required on every numeric column. Verify the font actually has `tnum`. */
+  --b-font-numeric-tabular: tabular-nums lining-nums;
+}
+@media (min-width: 768px) {
+  :root {
+    --b-text-display-size: 4rem;
+    --b-text-body-size: 1.0625rem;
+  }
+}
+
+/* ------------------------------------------------- 4. SPACE, RADIUS, MOTION */
+:root {
+  --b-space-1: .25rem; --b-space-2: .5rem;  --b-space-3: .75rem;
+  --b-space-4: 1rem;   --b-space-6: 1.5rem; --b-space-8: 2rem;
+  --b-space-12: 3rem;  --b-space-16: 4rem;  --b-space-24: 6rem;
+
+  --b-radius-sm: 2px; --b-radius-md: 3px; --b-radius-lg: 4px;
+
+  --b-duration-fast: 140ms; --b-duration-base: 200ms;
+  --b-ease-standard: cubic-bezier(.2, 0, .2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --b-duration-fast: 0ms; --b-duration-base: 0ms; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important; transition-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* ------------------------------------------------------- 5. CLAIM FACTS
+   Numbers the brand asserts live here, once. Update the token, not the markup. */
+:root {
+  --b-fact-customers: 0;
+}

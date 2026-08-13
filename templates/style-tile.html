@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title><BRAND> — Style Tile</title>
+<style>
+/* Remote import is for preview convenience only. Every stack falls back to
+   system faces, and this page is TESTED with the import blocked. */
+@import url('https://fonts.googleapis.com/css2?family=<FAMILY>&display=swap');
+
+/* ===== TOKENS — paste from tokens.css. Component CSS uses var() only. ===== */
+:root { /* core → semantic, light */ }
+[data-theme="dark"] { /* semantic remap only */ }
+@media (min-width:768px) { :root { /* responsive type + spacing tokens */ } }
+@media (prefers-reduced-motion:reduce) {
+  :root { /* every duration token → 0ms */ }
+  *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important;
+    animation-iteration-count:1!important}
+}
+
+/* ===== BASE ===== */
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--b-color-bg-page);color:var(--b-color-text-primary);
+  font-family:var(--b-font-sans);font-size:var(--b-text-body-size);line-height:var(--b-text-body-line)}
+/* Visible focus is non-negotiable. Never outline:none without a better replacement. */
+:focus-visible{outline:2px solid var(--b-color-focus-ring);outline-offset:2px}
+
+/* Optional: material grain. Painted BEHIND content, symmetric noise averaging to
+   the base ground, so no contrast pairing changes. No image asset. */
+.plate{position:relative;isolation:isolate}
+.plate::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;opacity:.05;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size:140px 140px}
+.plate>*{position:relative;z-index:1}
+
+/* Wide content scrolls in its own container; the page body never scrolls sideways. */
+.scroll-x{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:34rem}
+td.num,th.num{text-align:right;font-variant-numeric:var(--b-font-numeric-tabular)}
+.specimen{font-style:italic;color:var(--b-color-text-meta)}
+</style>
+</head>
+<body>
+
+<!-- Every section below is REQUIRED. Delete none of them. -->
+<nav><!-- wordmark · pronunciation cue · links · theme control --></nav>
+
+<main>
+  <!-- HERO: the real approved headline. If copy exists, quote it and cite the
+       source heading in a comment. If not, mark the headline provisional. -->
+  <header><!-- eyebrow · headline · subhead · CTAs · stage-honesty line --></header>
+
+  <!-- The artifact a skeptical reader can evaluate immediately. For most brands
+       this is the signature component, not a decorative image. -->
+  <section><!-- signature component, with specimen labelling --></section>
+
+  <section><!-- IDENTITY: wordmark, lockup, endorsement, pronunciation, descriptor --></section>
+  <section><!-- COLOUR: grounds, ink, accent, status. Show hex values as text. --></section>
+  <section><!-- TYPE: full scale specimen, each row labelled with its token values --></section>
+  <section><!-- SPACING: the scale, drawn --></section>
+  <section><!-- COMPONENTS: buttons (all states incl. disabled + loading),
+                 inputs (default/hover/error/disabled), cards, table, callouts --></section>
+  <section><!-- THEMES: light and dark shown SIMULTANEOUSLY via theme-locked panels,
+                 so both are visible whichever the toggle is set to --></section>
+
+  <!-- DESIGN RATIONALE — required, visible on the page -->
+  <section>
+    <!-- selected creative territory · taste profile · three visual principles ·
+         a statement that the implementation is original and strategy-led -->
+  </section>
+</main>
+
+<footer><!-- wordmark · descriptor · endorsement · specimen-labelling statement --></footer>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var buttons = document.querySelectorAll('[data-set-theme]');
+  function apply(t) {
+    root.setAttribute('data-theme', t);
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set-theme') === t));
+    });
+  }
+  var mq = window.matchMedia('(prefers-color-scheme: dark)');
+  apply(mq.matches ? 'dark' : 'light');                       // follow the system…
+  mq.addEventListener('change', function (e) { apply(e.matches ? 'dark' : 'light'); });
+  buttons.forEach(function (b) {                              // …until the user chooses
+    b.addEventListener('click', function () { apply(b.getAttribute('data-set-theme')); });
+  });
+})();
+</script>
+</body>
+</html>

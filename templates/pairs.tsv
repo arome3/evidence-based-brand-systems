@@ -1,0 +1,28 @@
+# Every foreground/background pairing the system ships.
+# name<TAB>foreground<TAB>background<TAB>threshold
+#
+# threshold: 4.5 | 3.0 | normal | large | ui | aaa
+#   normal = 4.5:1 body text
+#   large  = 3.0:1 text >=24px, or >=18.66px bold
+#   ui     = 3.0:1 interactive component boundaries and focus indicators
+#
+# Verify:  python3 scripts/brandcheck.py contrast pairs.tsv
+# Ratios are truncated, never rounded up — 4.499:1 does not meet 4.5:1.
+#
+# Every surface an element can sit on needs its own row: a border that passes
+# on the page ground can fail on a sunken well. Adjacent colour is what counts.
+#
+# ---------- LIGHT ----------
+L01 body text on page	#000000	#ffffff	normal
+L02 body text on surface	#000000	#ffffff	normal
+L03 secondary text on page	#000000	#ffffff	normal
+L04 link on page	#000000	#ffffff	normal
+L05 button label on accent fill	#ffffff	#000000	normal
+L06 focus ring vs page	#000000	#ffffff	ui
+L07 control border vs page	#000000	#ffffff	ui
+L08 control border vs surface	#000000	#ffffff	ui
+#
+# ---------- DARK ----------
+D01 body text on page	#ffffff	#000000	normal
+D02 focus ring vs page	#ffffff	#000000	ui
+D03 control border vs page	#ffffff	#000000	ui
