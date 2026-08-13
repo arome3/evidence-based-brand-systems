@@ -782,14 +782,15 @@ def cmd_lexicon(args: argparse.Namespace, rep: Report) -> None:
 def cmd_all(args: argparse.Namespace, rep: Report) -> None:
     d = args.dir
     cmd_tokens(argparse.Namespace(dir=d, css=None, json=None), rep)
-    pairs = os.path.join(d, "pairs.tsv")
+    pairs = getattr(args, "pairs", None) or os.path.join(d, "pairs.tsv")
     if os.path.exists(pairs):
         cmd_contrast(argparse.Namespace(pairs=pairs), rep)
     else:
         rep.section("CONTRAST")
-        rep.fail("no pairs.tsv found. Every foreground/background pairing the system "
-                 "ships must be declared and computed — an undeclared pairing is an "
-                 "unverified pairing.")
+        rep.fail(f"no pairings file at {pairs}. Every foreground/background pairing the "
+                 f"system ships must be declared and computed — an undeclared pairing is an "
+                 f"unverified pairing. If it lives outside the brand directory, pass "
+                 f"--pairs PATH.")
     cmd_lexicon(argparse.Namespace(dir=d, strict=args.strict,
                                    show_suppressed=args.show_suppressed), rep)
 
@@ -831,6 +832,7 @@ def main() -> int:
     a.add_argument("dir")
     a.add_argument("--strict", action="store_true")
     a.add_argument("--show-suppressed", action="store_true")
+    a.add_argument("--pairs", help="pairings file, if kept outside BRAND_DIR")
     a.set_defaults(fn=cmd_all)
 
     p.add_argument("--version", action="version",
