@@ -1,0 +1,15 @@
+{
+  "$schema": "https://code.claude.com/schemas/plugin.json",
+  "name": "evidence-based-brand-systems",
+  "version": "1.1.0",
+  "description": "Produce complete, verifiable brand systems — identity, creative direction, guidelines, design tokens and a working style tile — with a verifier that checks contrast, token drift, font reality and fabricated proof.",
+  "author": { "name": "Abraham Onoja" },
+  "homepage": "https://github.com/arome3/evidence-based-brand-systems",
+  "repository": "https://github.com/arome3/evidence-based-brand-systems",
+  "license": "MIT",
+  "keywords": [
+    "brand-identity", "brand-guidelines", "design-tokens", "design-systems",
+    "style-guide", "visual-identity", "accessibility", "wcag", "typography",
+    "dtcg", "brand-audit"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "evidence-based-brand-systems",
+  "owner": {
+    "name": "Abraham Onoja",
+    "url": "https://github.com/arome3"
+  },
+  "metadata": {
+    "description": "Verifiable brand systems for agent runtimes",
+    "version": "1.1.0"
+  },
+  "plugins": [
+    {
+      "name": "evidence-based-brand-systems",
+      "source": "./",
+      "description": "Produce complete, verifiable brand systems — identity, creative direction, guidelines, design tokens and a working style tile. Ships brandcheck, which computes every contrast pairing, diffs token formats against each other, verifies font binaries, and flags fabricated proof.",
+      "version": "1.1.0",
+      "author": { "name": "Abraham Onoja" },
+      "homepage": "https://github.com/arome3/evidence-based-brand-systems",
+      "repository": "https://github.com/arome3/evidence-based-brand-systems",
+      "license": "MIT",
+      "tags": [
+        "brand-identity", "brand-guidelines", "design-tokens", "design-systems",
+        "visual-identity", "accessibility", "wcag", "typography", "brand-audit"
+      ]
+    }
+  ]
+}
