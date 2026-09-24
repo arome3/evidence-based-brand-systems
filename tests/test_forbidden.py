@@ -123,3 +123,39 @@ def test_an_assumption_label_does_not_clear_a_forbidden_claim(run, write, tmp_pa
     write("index.md", "[Assumption] Bank-grade reconciliation for every team.\n")
     code, out = run("lexicon", tmp_path)
     assert code == 1
+
+
+def test_a_prohibition_word_after_the_quoted_claim_does_not_clear_it(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", 'Our "bank-grade" controls never sleep.\n')
+    code, out = run("lexicon", tmp_path)
+    assert code == 1
+
+
+def test_not_just_is_an_affirmation_not_a_denial(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", "Harbourline is not just bank-grade.\n\nIt isn't merely regulator approved.\n")
+    code, out = run("lexicon", tmp_path)
+    assert "index.md:1 forbidden claim" in out
+    assert "index.md:3 forbidden claim" in out
+
+
+def test_an_evidence_label_clears_only_quoted_material(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", "Harbourline is bank-grade [VERIFIED 2026-09-01].\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 1
+
+
+def test_markup_inside_a_phrase_does_not_hide_it(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.html", "<p>Our <em>bank</em>-grade controls</p>\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 1
+
+
+def test_a_phrase_wrapped_across_lines_is_caught(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", "Reconciliation that is regulator\napproved from day one.\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 1

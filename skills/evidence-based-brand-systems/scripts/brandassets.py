@@ -16,8 +16,8 @@ reproducible rather than drawn once and lost. Verify the result with
                                                          legibility review by eye
 
 `wordmark` needs fontTools and uharfbuzz (pip install fonttools uharfbuzz).
-`icons`, `png` and `sheet` need Playwright with Chromium (pip install
-playwright && python -m playwright install chromium).
+`icons` and `png` need Playwright with Chromium (pip install playwright &&
+python -m playwright install chromium). `sheet` is standard library.
 
 Exit code is 0 only if everything was built.
 """
@@ -255,13 +255,15 @@ def resolve_icon_colours(tokens_path, bg: str, fg: str, dark_bg: Optional[str] =
         nonlocal tok
         if value is None:
             return None
-        if value.strip().startswith("--"):
+        v = value.strip()
+        if v.startswith("--") or v.lower().startswith("var("):
             if tok is None:
                 if not tokens_path or not os.path.exists(tokens_path):
                     raise ValueError(f"{value} names a token, but there is no tokens.css "
                                      f"(pass --tokens PATH)")
                 tok = bc.parse_token_css(pathlib.Path(tokens_path).read_text(encoding="utf-8"))
-            value = bc.resolve_var(f"var({value.strip()})", tok.theme(theme))
+            value = bc.resolve_var(v if v.lower().startswith("var(") else f"var({v})",
+                                   tok.theme(theme))
             if "var(" in value:
                 raise ValueError(f"unknown token in the {theme} theme: {value}")
         return bc.to_hex(bc.parse_colour(value)) if bc.parse_colour(value)[3] >= 1.0 \
@@ -341,9 +343,9 @@ def cmd_icons(args, rep: bc.Report) -> None:
     try:
         args.bg, args.fg, args.dark_bg, args.dark_fg = resolve_icon_colours(
             tokens_path, args.bg, args.fg, args.dark_bg, args.dark_fg)
-        used = [(n.strip(), theme, v) for (n, theme), v in
-                zip(names, (args.bg, args.fg, args.dark_bg, args.dark_fg))
-                if n and n.strip().startswith("--")]
+        used = [(re.sub(r"^var\(\s*|\s*\)$", "", n.strip()), theme, v)
+                for (n, theme), v in zip(names, (args.bg, args.fg, args.dark_bg, args.dark_fg))
+                if n and (n.strip().startswith("--") or n.strip().lower().startswith("var("))]
         for c in (args.bg, args.dark_bg):
             if c and bc.parse_colour(c)[3] < 1.0:
                 raise ValueError(f"the icon ground {c} must be opaque: iOS paints "
@@ -508,7 +510,7 @@ def cmd_sheet(args, rep: bc.Report) -> None:
 
 # ─────────────────────────────────────────────────────────────── main ──
 
-def main(argv: Optional[List[str]] = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="brandassets", description=__doc__.split("\n\n")[0],
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 epilog=__doc__)
@@ -532,7 +534,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     i.add_argument("--name", required=True, help="the product name for the manifest")
     i.add_argument("--short-name")
     i.add_argument("--bg", required=True,
-                   help="opaque ground: a token name (--b-color-bg-page) or a colour")
+                   help="opaque ground: a token (write --bg=--b-color-bg-page, or "
+                        "--bg 'var(--b-color-bg-page)') or a colour")
     i.add_argument("--fg", required=True, help="ink for currentColor paths: a token or a colour")
     i.add_argument("--dark-bg", help="icon.svg ground under a dark OS theme (dark-theme token)")
     i.add_argument("--dark-fg", help="icon.svg ink under a dark OS theme (dark-theme token)")
@@ -553,7 +556,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.set_defaults(fn=cmd_sheet)
 
     p.add_argument("--version", action="version", version=f"brandassets {__version__}")
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
     rep = bc.Report()
     args.fn(args, rep)
     return rep.verdict()

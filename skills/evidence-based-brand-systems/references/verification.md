@@ -24,6 +24,7 @@ python3 scripts/brandcheck.py all BRAND_DIR --glyphs "=≠?→✓"
 | Banned lexicon and unreferenced proof claims, with the referent attached to the claim (same paragraph, list item, table row or cited footnote) | Hype language and fabricated credibility; a date elsewhere in the document clears nothing |
 | `forbidden-claims.txt` | A claim stage 1 ruled out, in any document or page (`--claims` for a site elsewhere). Cleared only by a quoted prohibition, an evidence label, or a denial directly before it |
 | Pasted token blocks in every HTML file | A style tile or share card whose copy of the tokens has drifted from `tokens.css` |
+| The generated pairing table in `04-brand-guidelines.md` | A ratio in the guidelines that no longer matches the tokens, or was typed |
 | PNG provenance records | A share card or icon rendered before its page, mark or colour token changed ("stale") |
 | `tokens.json` regenerated from `tokens.css` and compared | A JSON edited by hand ("edited by hand") or left behind a CSS change ("stale") |
 | `pairs.tsv` rows resolved by token name, per theme | A pairing that verifies a copied hex after the token moved; a surface the dark theme forgot |
@@ -38,11 +39,11 @@ python3 scripts/brandcheck.py all BRAND_DIR --glyphs "=≠?→✓"
 
 ## Layer 2 — Rendered
 
-`brandcheck render` (part of `all`) mechanises most of this layer. It opens the style tile offline in Chromium, in both themes at 320px (the WCAG reflow width) and 1440px, and fails any painted text, placeholder or field-border colour that is undeclared in `pairs.tsv` or below its threshold, any horizontal overflow, any focus state with no indicator or a ring under 3:1, and any animation that survives reduced-motion. Its model composites backgrounds up the ancestor chain; text over a background image, or over an absolutely positioned sibling, is outside it and is reported, not guessed.
+`brandcheck render` (part of `all`) mechanises most of this layer. It opens the style tile offline in Chromium, in both themes at 320px (the WCAG reflow width) and 1440px, and fails any painted text, placeholder or field-border colour that is undeclared in `pairs.tsv` or below its threshold, any horizontal overflow, any focus state with no indicator or a ring under 3:1, and any animation that survives reduced-motion. It also checks the borders of transparent (ghost) buttons, and reads the page's visible text against the forbidden claims, so copy set by script is gated too. Its model composites backgrounds up the ancestor chain. Text over a background image is reported as unverifiable. Text over an absolutely positioned sibling, inline SVG icon colours, hover and pressed states, and native checkboxes and radios are **not** checked; they stay in the manual list below.
 
 It renders any served page too: `brandcheck render http://localhost:3000/ --pairs BRAND_DIR/pairs.tsv` loads only from that origin, so a landing page is held to the same pairings as the tile.
 
-What remains for a person: greyscale, 200% zoom, whether the focus order makes sense, the offline render actually looking right, and legibility of the assets on `asset-sheet.html`. Open the artifact. Every item is a thing to *do*, not to reason about.
+What remains for a person: greyscale, 200% zoom, whether the focus order makes sense, text over overlays and images, icon and hover-state colours, the offline render actually looking right, and legibility of the assets on `asset-sheet.html`. Open the artifact. Every item is a thing to *do*, not to reason about.
 
 - [ ] **Desktop and mobile widths.** Confirm zero horizontal overflow on the page body; wide content scrolls inside its own container.
 - [ ] **Both themes**, via the control and via the system preference, in both directions.

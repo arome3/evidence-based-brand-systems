@@ -147,3 +147,17 @@ def test_icons_rendered_before_the_mark_changed_are_stale(run, ba_run, fixture_f
     (a / "mark.svg").write_text(MARK_SVG.replace("M16 16h32v32H16z", "M20 20h24v24H20z"))
     code, out = run("assets", tmp_path)
     assert "stale" in out and "mark.svg" in out
+
+
+def test_icon_colour_flags_accept_token_names_on_the_command_line(ba):
+    # `--bg --b-x` reads the token as a new option; `--bg=--b-x` and var() work.
+    args = ba.build_parser().parse_args(
+        ["icons", "m.svg", "--out", "o", "--name", "B", "--bg=--b-ground",
+         "--fg", "var(--b-ink)"])
+    assert args.bg == "--b-ground" and args.fg == "var(--b-ink)"
+
+
+def test_var_syntax_names_a_token_too(ba, tmp_path):
+    (tmp_path / "tokens.css").write_text(":root { --b-ground: #07110f; --b-ink: #f0efe9; }\n")
+    colours = ba.resolve_icon_colours(tmp_path / "tokens.css", "var(--b-ground)", "--b-ink")
+    assert colours[:2] == ("#07110f", "#f0efe9")

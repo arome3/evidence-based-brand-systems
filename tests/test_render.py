@@ -186,3 +186,24 @@ def test_a_served_page_can_be_rendered_by_url(run, write, tmp_path):
         server.shutdown()
     assert code == 0, out
     assert "all declared" in out
+
+
+def test_rendered_copy_is_checked_for_forbidden_claims(run, write):
+    # Copy injected at runtime (a CMS, a script) never appears in a source file.
+    write("tokens.css", TOKENS)
+    write("pairs.tsv", PAIRS)
+    write("forbidden-claims.txt", "bank-grade\tno assessment\n")
+    page = write("style-tile.html", tile(body='<p id=c></p><script>'
+                 'document.getElementById("c").textContent = "Bank-grade by default";</script>'))
+    code, out = run("render", page)
+    assert code == 1
+    assert "forbidden claim" in out
+
+
+def test_a_ghost_button_border_is_a_ui_pairing(run, write):
+    page = setup(write, tile(".ghost { background: transparent; color: var(--b-color-text);"
+                             " border: 1px solid #e6e6e6; }",
+                             body='<p><button class=ghost type=button>Ghost</button></p>'))
+    code, out = run("render", page)
+    assert code == 1
+    assert "(control border)" in out

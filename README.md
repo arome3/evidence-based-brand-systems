@@ -120,8 +120,8 @@ S=~/.claude/skills/evidence-based-brand-systems/scripts/brandcheck.py
 python3 $S all BRAND_DIR [--strict] [--glyphs "=≠?→✓"]   # everything below that applies
 python3 $S export BRAND_DIR                               # tokens.css -> tokens.json
 python3 $S tokens BRAND_DIR
-python3 $S contrast pairs.tsv [--tokens tokens.css]
-python3 $S render style-tile.html [--widths 320,1440]
+python3 $S contrast pairs.tsv [--tokens tokens.css] [--update 04-brand-guidelines.md]
+python3 $S render style-tile.html [--widths 320,1440]   # or a served URL with --pairs
 python3 $S assets BRAND_DIR [--assets PATH]
 python3 $S fonts FONT.ttf --glyphs "=≠?→✓" --licence OFL.txt
 python3 $S lexicon DIR [--claims forbidden-claims.txt] [--strict] [--show-suppressed]
@@ -136,7 +136,7 @@ Exit code 0 or it does not ship. What it catches:
 - **Font reality.** Glyph coverage, whether `tnum` exists and is weight-stable, variable axis ranges, and Reserved Font Name status **read from the licence file, not the binary** — because IBM Plex declares an RFN in its `OFL.txt` and carries none in its `name` table.
 - **Hype and fabricated proof**, with quoted material, labelled research, prohibitions, dated attributions and withheld values suppressed so correct documentation scores zero. A referent counts only when it is attached to its claim (same paragraph, list item, table row or cited footnote); a date elsewhere clears nothing. Count, performance-metric and endorsement claims are caught. `--show-suppressed` audits every suppression.
 - **Forbidden claims.** `forbidden-claims.txt` turns stage 1's list of claims the company may not make into a gate over every document and page (including `.ts`, `.js` and `.json` copy), and over a landing page elsewhere (`--claims`). Only a quoted phrase inside a prohibition, an evidence label, or a denial directly before the phrase clears a hit.
-- **Drifted copies.** A style tile or share card whose pasted token block disagrees with `tokens.css` fails; so does a PNG whose source page, mark or colour token changed after it was rendered.
+- **Drifted copies.** A style tile or share card whose pasted token block disagrees with `tokens.css` fails; so does a PNG whose source page, mark or colour token changed after it was rendered, and a pairing table in the guidelines that no longer matches the computed ratios (it is generated between markers by `contrast --update`).
 - **Translucency.** A foreground with alpha is composited over its ground before the ratio is computed; white at 40% is not white.
 - **Stale pairings.** `pairs.tsv` rows name tokens and are resolved per theme on every run, so a pairing cannot keep verifying a copied value after the token moves.
 - **Generated tokens.** `export` writes DTCG 2025.10 JSON from the CSS; `tokens` regenerates it and fails a stale or hand-edited file.

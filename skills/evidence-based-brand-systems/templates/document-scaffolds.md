@@ -14,6 +14,8 @@ a missing section reads as an oversight, a stated gap reads as a decision.
 Scope note: what every claim below traces to.
 
 ## Assumptions            <- at the TOP, always. Every unresolved decision listed.
+## Fact base              stage 1's table: one row per claim the brand will make, each
+                          with its source (document and section, or a URL fetched today)
 ## Brand foundation       purpose · promise · positioning · audience
                           functional / commercial / emotional benefit
                           what it IS · what it is NOT
@@ -114,9 +116,11 @@ When a rule is later reversed, **amend in place and say so**. A silently edited 
                         assets/wordmark.svg) · clear space · minimum size · light / dark /
                         monochrome via currentColor · the mark and when each is used ·
                         misuse · pre-registration handling
-## Colour pairing       EVERY pairing: fg token · bg token · fg hex · bg hex ·
-                        computed ratio · threshold · pass/fail · intended use
-                        + documented exemptions (disabled, decorative, logotype)
+## Colour pairing       <!-- brandcheck:pairs:start --> <!-- brandcheck:pairs:end -->
+                        GENERATED: brandcheck contrast pairs.tsv --update this file
+                        (every pairing, tokens, hex, truncated ratio, threshold, result).
+                        Then, in prose: intended use per pairing, and the documented
+                        exemptions (disabled, decorative, logotype)
 ## Voice in application buttons · forms · empty states · errors · warnings ·
                         loading · completion · uncertainty
 ## Brand applications   email signature · avatar (assets/avatar.png) · share card

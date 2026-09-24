@@ -107,8 +107,14 @@ def test_a_complete_brand_directory_passes_all(run, ba_run, tmp_path, fixture_fo
     assert ba_run("png", root / "og-card.html", "--size", "1200x630",
                   "-o", a / "og-default.png")[0] == 0
 
+    (root / "04-brand-guidelines.md").write_text(
+        "# Guidelines\n\n## Colour pairing\n\n<!-- brandcheck:pairs:start -->\n"
+        "<!-- brandcheck:pairs:end -->\n")
+    assert run("contrast", root / "pairs.tsv", "--update", root / "04-brand-guidelines.md")[0] == 0
     assert run("export", root)[0] == 0
     code, out = run("all", root, "--glyphs", "RAV0")
     assert code == 0, out
     for section in ("TOKENS", "CONTRAST", "LEXICON", "FONTS", "ASSETS", "RENDER"):
         assert section in out
+    assert "the pairing table in 04-brand-guidelines.md matches" in out
+    assert "rendered copy: none of the 1 forbidden claim(s) appear" in out

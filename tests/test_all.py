@@ -98,3 +98,38 @@ def test_all_fails_a_hand_written_tokens_json(run, write, tmp_path):
                          '"components":[1,1,1],"hex":"#ffffff"}}}}')
     code, out = run("all", tmp_path, "--no-render")
     assert "FAIL  tokens.json was not produced by `brandcheck export`" in out
+
+
+def test_each_font_family_is_checked_against_its_own_licence(run, write, tmp_path, fixture_font):
+    brand(write)
+    for fam, lic in (("inter", "inter-LICENSE.txt"), ("plex", "ibm-plex-LICENSE.txt")):
+        (tmp_path / "fonts" / fam).mkdir(parents=True)
+        shutil.copy(fixture_font, tmp_path / "fonts" / fam / f"{fam}.ttf")
+        shutil.copy(FIXTURES / "licences" / lic, tmp_path / "fonts" / fam / "OFL.txt")
+    code, out = run("all", tmp_path, "--no-render")
+    inter = out.split("FONTS · inter.ttf")[1].split("FONTS ·")[0]
+    plex = out.split("FONTS · plex.ttf")[1].split("ASSETS")[0]
+    assert "no Reserved Font Name declared" in inter
+    assert 'Reserved Font Name "Plex"' in plex
+
+
+def test_all_warns_when_no_fonts_ship(run, write, tmp_path):
+    brand(write)
+    code, out = run("all", tmp_path, "--no-render")
+    assert "no fonts/" in out
+
+
+def test_all_fails_bundled_fonts_it_cannot_read(run, write, tmp_path, fixture_font, monkeypatch):
+    import builtins
+    brand(write)
+    (tmp_path / "fonts").mkdir()
+    shutil.copy(fixture_font, tmp_path / "fonts" / "Brand.ttf")
+    real_import = builtins.__import__
+
+    def no_fonttools(name, *a, **k):
+        if name.startswith("fontTools"):
+            raise ImportError("no fontTools")
+        return real_import(name, *a, **k)
+    monkeypatch.setattr(builtins, "__import__", no_fonttools)
+    code, out = run("all", tmp_path, "--no-render")
+    assert "FAIL  fontTools not installed" in out

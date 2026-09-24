@@ -19,7 +19,7 @@ All files live in `BRAND_DIR/assets/`.
 | `og-default.png` (+ any `og-*.png`) | Share card | Exactly 1200x630 |
 | `manifest.webmanifest` | Names the app and its icons | Real name, 192 + 512 + maskable declared, every file exists at its declared size |
 | `head-snippet.html` | The `<link>`/`<meta>` tags | Handoff; `og:image` must become an absolute URL |
-| `asset-sheet.html` | Review sheet | Not a deliverable; evidence that the review by eye happened |
+| `asset-sheet.html` | Review sheet | The record that the review by eye happened: keep it, never deploy it |
 
 The favicon set is the 2026 minimal set (Evil Martians, "How to Favicon", updated 2026-01-21): an ICO, an SVG with a dark-mode style, a 180px Apple icon, 192/512px PNGs and a maskable 512px icon.
 
@@ -50,11 +50,11 @@ The mark is the element that must work at 16px, so it is built for 16px first.
 
 ```bash
 python3 scripts/brandassets.py icons assets/mark.svg --out assets --name "Brand" \
-  --bg --b-color-bg-page --fg --b-color-text-primary \
-  --dark-bg --b-color-bg-page --dark-fg --b-color-text-primary --radius 0.18
+  --bg=--b-color-bg-page --fg=--b-color-text-primary \
+  --dark-bg=--b-color-bg-page --dark-fg=--b-color-text-primary --radius 0.18
 ```
 
-Name tokens, not colours: `--bg`/`--fg` resolve in the light theme and `--dark-*` in the dark theme, from `tokens.css` beside the `assets/` directory (or `--tokens PATH`). A typed hex stays that hex after the palette moves. The ground must be opaque; the command refuses a translucent one. `--padding` sets the margin around the mark on the square icons. The maskable icon and the avatar ignore it: each fits the mark's bounding-box *diagonal* inside its circle, so no corner of the art can be cut, however wide the mark is. Every PNG carries a provenance record: the source file's sha256 and the tokens it was rendered with. `brandcheck assets` fails a PNG whose mark, page or colour token has changed since it was rendered ("stale"), so a forgotten re-export cannot pass as current.
+Name tokens, not colours, joined with `=` (`--bg=--b-color-bg-page`) or as `var(--b-color-bg-page)`, because a bare `--bg --b-...` reads the token as another option: `--bg`/`--fg` resolve in the light theme and `--dark-*` in the dark theme, from `tokens.css` beside the `assets/` directory (or `--tokens PATH`). A typed hex stays that hex after the palette moves. The ground must be opaque; the command refuses a translucent one. `--padding` sets the margin around the mark on the square icons. The maskable icon and the avatar ignore it: each fits the mark's bounding-box *diagonal* inside its circle, so no corner of the art can be cut, however wide the mark is. Every PNG carries a provenance record: the source file's sha256 and the tokens it was rendered with. `brandcheck assets` fails a PNG whose mark, page or colour token has changed since it was rendered ("stale"), so a forgotten re-export cannot pass as current.
 
 ## Share card and avatar
 
