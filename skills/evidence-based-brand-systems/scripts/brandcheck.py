@@ -1317,9 +1317,40 @@ def _units(lines: List[str], html: bool) -> List[int]:
     return ids
 
 
+# Forbidden claims: stage 1 records what this company may not claim at its
+# stage. forbidden-claims.txt turns that list into a gate. One claim per line,
+# "#" comments, an optional TAB and the reason. A plain phrase matches however
+# it is spaced or hyphenated; "re:" introduces a regular expression.
+#
+# Only quotation and research labels suppress a forbidden claim. Negation
+# words and dates do not: "Bank-grade controls, audit pending" is still the
+# claim. Wherever a guideline lists a forbidden phrase, it quotes it.
+CLAIMS_FILE = "forbidden-claims.txt"
+_SEP = r"[\s\-‐-―]*"
+
+
+def load_claims(path: str) -> List[Tuple["re.Pattern[str]", str, str]]:
+    claims = []
+    for raw in open(path, encoding="utf-8"):
+        line = raw.rstrip("\n")
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        phrase, _, reason = line.partition("\t")
+        phrase = phrase.strip()
+        if phrase.startswith("re:"):
+            rx = re.compile(phrase[3:], re.I)
+            shown = phrase[3:]
+        else:
+            words = [re.escape(w) for w in re.split(r"[\s\-‐-―]+", phrase) if w]
+            rx = re.compile(r"(?<!\w)" + _SEP.join(words) + r"(?!\w)", re.I)
+            shown = phrase
+        claims.append((rx, shown, reason.strip()))
+    return claims
+
+
 def _scan_text(path: str, text: str, rep: Report, strict: bool,
-               show_all: bool) -> Tuple[int, int, int]:
-    words = proofs = suppressed = 0
+               show_all: bool, claims=()) -> Tuple[int, int, int, int]:
+    words = proofs = suppressed = forbidden = 0
     all_lines = text.splitlines()
     ids = _units(all_lines, html=path.endswith((".html", ".htm")))
     unit_text: Dict[int, str] = {}
@@ -1337,6 +1368,19 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
         unit = unit_text[uid]
         window = unit + "".join(notes.get(ref, "") + "\n"
                                 for ref in _FOOTNOTE_REF.findall(unit))
+        for rx, shown, reason in claims:
+            for m in list(rx.finditer(line))[:1]:
+                quoted = any(q.start() <= m.start() and m.end() <= q.end()
+                             for q in QUOTED.finditer(line))
+                if quoted or RESEARCH_LABEL.search(line):
+                    suppressed += 1
+                    if show_all:
+                        rep.note(f"{os.path.basename(path)}:{i} forbidden claim '{shown}' "
+                                 f"suppressed ({'quoted' if quoted else 'labelled research'})")
+                    continue
+                forbidden += 1
+                rep.fail(f"{os.path.basename(path)}:{i} forbidden claim '{shown}' — "
+                         f"{line.strip()[:88]}" + (f"  [{reason}]" if reason else ""))
         for rx, label, is_word in checks:
             for m in list(rx.finditer(line))[:1]:      # one report per line and label
                 why = _suppressed(line, m.span(), window)
@@ -1353,27 +1397,43 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
                     proofs += 1
                     (rep.fail if strict else rep.warn)(
                         msg + "  [needs a real, dated, verifiable referent]")
-    return words, proofs, suppressed
+    return words, proofs, suppressed, forbidden
+
+
+SCANNED = (".md", ".mdx", ".html", ".htm", ".txt", ".astro", ".tsx", ".jsx", ".vue",
+           ".svelte")
+SKIPPED_DIRS = {".git", "node_modules", "__pycache__", "dist", "build", ".next", ".astro",
+                ".vercel", ".svelte-kit", "coverage"}
 
 
 def cmd_lexicon(args: argparse.Namespace, rep: Report) -> None:
     rep.section(f"LEXICON & PROOF · {args.dir}")
+    claims_path = getattr(args, "claims", None)
+    if not claims_path:
+        beside = os.path.join(args.dir, CLAIMS_FILE)
+        claims_path = beside if os.path.exists(beside) else None
+    elif not os.path.exists(claims_path):
+        rep.fail(f"claims file not found: {claims_path}")
+        return
+    claims = load_claims(claims_path) if claims_path else []
+
     targets = []
-    for root, _dirs, files in os.walk(args.dir):
-        if any(p in root for p in (".git", "node_modules", "__pycache__")):
-            continue
+    for root, dirs, files in os.walk(args.dir):
+        dirs[:] = [x for x in dirs if x not in SKIPPED_DIRS]
         for name in sorted(files):
-            if name.endswith((".md", ".html", ".htm", ".txt")):
-                targets.append(os.path.join(root, name))
+            path = os.path.join(root, name)
+            if name.endswith(SCANNED) and not (
+                    claims_path and os.path.abspath(path) == os.path.abspath(claims_path)):
+                targets.append(path)
     if not targets:
-        rep.warn("no .md/.html files found to scan")
+        rep.warn("no .md/.html (or page source) files found to scan")
         return
 
-    tw = tp = ts = 0
+    tw = tp = ts = tf = 0
     for path in targets:
-        w, p, sup = _scan_text(path, open(path, encoding="utf-8", errors="replace").read(),
-                               rep, args.strict, args.show_suppressed)
-        tw += w; tp += p; ts += sup
+        w, p, sup, fb = _scan_text(path, open(path, encoding="utf-8", errors="replace").read(),
+                                   rep, args.strict, args.show_suppressed, claims)
+        tw += w; tp += p; ts += sup; tf += fb
     if tw == 0:
         rep.ok(f"no banned marketing terms in the brand's own voice ({len(targets)} file(s))")
     if tp == 0:
@@ -1381,6 +1441,11 @@ def cmd_lexicon(args: argparse.Namespace, rep: Report) -> None:
     else:
         rep.note("proof hits are not automatically wrong — each must trace to something "
                  "real, dated and checkable. Confirm every one by hand.")
+    if claims and tf == 0:
+        rep.ok(f"none of the {len(claims)} forbidden claim(s) in "
+               f"{os.path.basename(claims_path)} appear")
+    elif not claims:
+        rep.note(f"no {CLAIMS_FILE}: stage 1's forbidden claims are not being enforced")
     if ts:
         rep.note(f"{ts} match(es) suppressed as quoted material, labelled research, or "
                  f"prohibitions. Re-run with --show-suppressed to audit them.")
@@ -1402,7 +1467,7 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
                  f"system ships must be declared and computed — an undeclared pairing is an "
                  f"unverified pairing. If it lives outside the brand directory, pass "
                  f"--pairs PATH.")
-    cmd_lexicon(argparse.Namespace(dir=d, strict=args.strict,
+    cmd_lexicon(argparse.Namespace(dir=d, strict=args.strict, claims=args.claims,
                                    show_suppressed=args.show_suppressed), rep)
 
 
@@ -1444,6 +1509,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                    help="treat proof-pattern hits as failures, not warnings")
     l.add_argument("--show-suppressed", action="store_true",
                    help="list matches suppressed as quotes/research/prohibitions")
+    l.add_argument("--claims", help=f"forbidden-claims file (default: DIR/{CLAIMS_FILE}); "
+                                    f"point it at the brand's file to scan a site elsewhere")
     l.set_defaults(fn=cmd_lexicon)
 
     a = sub.add_parser("all", help="tokens + contrast + lexicon over a brand directory")
@@ -1451,6 +1518,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     a.add_argument("--strict", action="store_true")
     a.add_argument("--show-suppressed", action="store_true")
     a.add_argument("--pairs", help="pairings file, if kept outside BRAND_DIR")
+    a.add_argument("--claims", help=f"forbidden-claims file (default: BRAND_DIR/{CLAIMS_FILE})")
     a.set_defaults(fn=cmd_all)
 
     p.add_argument("--version", action="version",
