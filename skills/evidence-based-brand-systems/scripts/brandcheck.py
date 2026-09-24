@@ -1754,6 +1754,279 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
                    f"all declared and meeting their threshold")
 
 
+# ───────────────────────────────────────────────────────────── assets ──
+# Iron Law 3: build what you specify. The guidelines specify a wordmark, a
+# mark, an icon set, an avatar and a share image; these checks read the files
+# themselves. Icon sizes and roles follow the 2026 minimal set (Evil Martians,
+# "How to Favicon", updated 2026-01-21) and the W3C maskable safe zone (a
+# centred circle of radius 40%).
+
+ASSET_PNGS = {
+    "apple-touch-icon.png": (180, "opaque"),
+    "icon-192.png": (192, None),
+    "icon-512.png": (512, None),
+    "icon-mask.png": (512, "mask"),
+    "avatar.png": (400, "avatar"),
+}
+LOGO_SVGS = ("wordmark.svg", "mark.svg", "icon.svg")
+OG_SIZE = (1200, 630)
+_SVG_BANNED = {"text": "live text", "tspan": "live text", "textPath": "live text",
+               "image": "an embedded or linked image", "foreignObject": "foreign HTML content",
+               "script": "a script", "iframe": "an iframe"}
+
+
+class PNGImage:
+    def __init__(self, width, height, ctype, depth, interlace):
+        self.width, self.height, self.ctype = width, height, ctype
+        self.depth, self.interlace = depth, interlace
+        self.data: Optional[bytearray] = None
+        self.ch = {0: 1, 2: 3, 4: 2, 6: 4}.get(ctype, 0)
+
+    def px(self, x: int, y: int) -> Tuple[int, int, int, int]:
+        i = (y * self.width + x) * self.ch
+        d = self.data
+        if self.ctype == 6:
+            return d[i], d[i + 1], d[i + 2], d[i + 3]
+        if self.ctype == 2:
+            return d[i], d[i + 1], d[i + 2], 255
+        if self.ctype == 4:
+            return d[i], d[i], d[i], d[i + 1]
+        return d[i], d[i], d[i], 255
+
+
+def read_png(path: str, decode: bool = True) -> PNGImage:
+    """Size always; pixels for 8-bit, non-interlaced grey/RGB/RGBA (stdlib only)."""
+    import struct
+    import zlib
+    blob = open(path, "rb").read()
+    if not blob.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("not a PNG file")
+    pos, idat, img = 8, [], None
+    while pos + 8 <= len(blob):
+        n, tag = struct.unpack(">I4s", blob[pos:pos + 8])
+        data = blob[pos + 8:pos + 8 + n]
+        pos += 12 + n
+        if tag == b"IHDR":
+            w, h, depth, ctype, _, _, interlace = struct.unpack(">IIBBBBB", data)
+            img = PNGImage(w, h, ctype, depth, interlace)
+        elif tag == b"IDAT":
+            idat.append(data)
+        elif tag == b"IEND":
+            break
+    if img is None:
+        raise ValueError("PNG has no IHDR")
+    if not decode or img.depth != 8 or img.interlace or not img.ch:
+        return img
+    raw, bpp = zlib.decompress(b"".join(idat)), img.ch
+    stride = img.width * bpp
+    out, prev = bytearray(), bytearray(stride)
+    for y in range(img.height):
+        base = y * (stride + 1)
+        f, line = raw[base], bytearray(raw[base + 1:base + 1 + stride])
+        if f == 1:
+            for i in range(bpp, stride):
+                line[i] = (line[i] + line[i - bpp]) & 255
+        elif f == 2:
+            line = bytearray((a + b) & 255 for a, b in zip(line, prev))
+        elif f == 3:
+            for i in range(stride):
+                left = line[i - bpp] if i >= bpp else 0
+                line[i] = (line[i] + ((left + prev[i]) >> 1)) & 255
+        elif f == 4:
+            for i in range(stride):
+                a = line[i - bpp] if i >= bpp else 0
+                b, c = prev[i], (prev[i - bpp] if i >= bpp else 0)
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                line[i] = (line[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        out += line
+        prev = line
+    img.data = out
+    return img
+
+
+def _outside_circle_is_ground(img: PNGImage, radius: float, tol: int = 3) -> bool:
+    """True when every pixel outside a centred circle matches the corner pixel."""
+    ground = img.px(0, 0)
+    cx, cy = img.width / 2, img.height / 2
+    r2 = radius * radius
+    for y in range(img.height):
+        dy2 = (y + 0.5 - cy) ** 2
+        for x in range(img.width):
+            if (x + 0.5 - cx) ** 2 + dy2 > r2:
+                p = img.px(x, y)
+                if any(abs(p[k] - ground[k]) > tol for k in range(4)):
+                    return False
+    return True
+
+
+def _check_logo_svg(path: str, rep: Report) -> None:
+    import xml.etree.ElementTree as ET
+    name = os.path.basename(path)
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as exc:
+        rep.fail(f"{name}: not well-formed SVG ({exc})")
+        return
+    local = lambda t: t.rsplit("}", 1)[-1]          # noqa: E731
+    if local(root.tag) != "svg":
+        rep.fail(f"{name}: root element is <{local(root.tag)}>, not <svg>")
+        return
+    problems = []
+    try:
+        vb = [float(v) for v in re.split(r"[\s,]+", (root.get("viewBox") or "").strip())]
+        if len(vb) != 4 or vb[2] <= 0 or vb[3] <= 0:
+            raise ValueError
+    except ValueError:
+        problems.append("no usable viewBox, so it cannot scale")
+    for el in root.iter():
+        t = local(el.tag)
+        if t in _SVG_BANNED:
+            problems.append(f"contains <{t}> ({_SVG_BANNED[t]})")
+        for k, v in el.attrib.items():
+            if local(k) == "href" and not v.strip().startswith("#"):
+                problems.append(f"references {v!r} outside the file")
+        if t == "style" and el.text and (
+                "@import" in el.text or re.search(r"url\(\s*['\"]?(?!#|data:)", el.text)):
+            problems.append("its <style> fetches something outside the file")
+    if problems:
+        rep.fail(f"{name}: " + "; ".join(sorted(set(problems))) + ". A logo file is outlined "
+                 f"paths in one self-contained SVG: live text renders in whatever font the "
+                 f"viewer has.")
+        return
+    rep.ok(f"{name}: outlined, self-contained vector (viewBox {root.get('viewBox')})")
+    if name == "wordmark.svg":
+        meta = next((el.text for el in root.iter() if local(el.tag) == "metadata"), None)
+        try:
+            record = json.loads(meta or "")
+        except ValueError:
+            record = {}
+        if not record.get("fontSha256"):
+            rep.warn("wordmark.svg carries no construction record. Build it with "
+                     "`brandassets.py wordmark` so the font file, size, tracking and features "
+                     "that reproduce it travel with it.")
+
+
+def cmd_assets(args: argparse.Namespace, rep: Report) -> None:
+    import struct
+    d = args.assets or os.path.join(args.dir, "assets")
+    rep.section(f"ASSETS · {d}")
+    if not os.path.isdir(d):
+        rep.fail(f"no {d} directory. The guidelines specify a wordmark, a mark, an icon set, an "
+                 f"avatar and a share image, and Iron Law 3 requires them built. Generate "
+                 f"them with scripts/brandassets.py (see references/assets.md), or pass "
+                 f"--assets PATH.")
+        return
+
+    def need(name):
+        path = os.path.join(d, name)
+        if not os.path.exists(path):
+            rep.fail(f"missing {name}")
+            return None
+        return path
+
+    for name in LOGO_SVGS:
+        path = need(name)
+        if path:
+            _check_logo_svg(path, rep)
+
+    for name, (size, rule) in ASSET_PNGS.items():
+        path = need(name)
+        if not path:
+            continue
+        try:
+            img = read_png(path, decode=rule is not None)
+        except (ValueError, OSError) as exc:
+            rep.fail(f"{name}: {exc}")
+            continue
+        if (img.width, img.height) != (size, size):
+            rep.fail(f"{name} is {img.width}x{img.height}; it must be {size}x{size}")
+            continue
+        if rule and img.data is None:
+            rep.warn(f"{name}: cannot decode this PNG variant to check its pixels; check by eye")
+            continue
+        if rule == "opaque":
+            alpha = img.data[img.ch - 1::img.ch] if img.ch in (2, 4) else b"\xff"
+            if min(alpha) < 255:
+                rep.fail(f"{name} is not fully opaque. iOS paints transparency black; "
+                         f"flatten it onto the brand ground.")
+                continue
+        elif rule == "mask" and not _outside_circle_is_ground(img, size * 0.4):
+            rep.fail(f"{name}: artwork leaves the maskable safe zone (a centred circle of "
+                     f"radius 40%), so launchers that mask to a circle will cut it.")
+            continue
+        elif rule == "avatar" and not _outside_circle_is_ground(img, size / 2):
+            rep.fail(f"{name}: artwork reaches outside the inscribed circle, so a round avatar "
+                     f"crop will cut it.")
+            continue
+        rep.ok(f"{name}: {size}x{size}" + {"opaque": ", opaque", "mask": ", inside the "
+                                           "maskable safe zone", "avatar": ", survives a "
+                                           "circular crop"}.get(rule or "", ""))
+
+    path = need("favicon.ico")
+    if path:
+        blob = open(path, "rb").read()
+        try:
+            reserved, kind, count = struct.unpack("<HHH", blob[:6])
+            if reserved != 0 or kind != 1:
+                raise ValueError
+            sizes = sorted({(blob[6 + 16 * i] or 256) for i in range(count)})
+        except (ValueError, struct.error, IndexError):
+            rep.fail("favicon.ico is not a valid ICO file")
+            sizes = None
+        if sizes is not None:
+            if 32 in sizes:
+                rep.ok(f"favicon.ico: {', '.join(str(x) for x in sizes)}px")
+            else:
+                rep.fail(f"favicon.ico holds {sizes}px but no 32px image, the size tabs use")
+
+    ogs = sorted(f for f in os.listdir(d) if f.startswith("og") and f.endswith(".png"))
+    if "og-default.png" not in ogs:
+        rep.fail("missing og-default.png, the share card used when a page has none of its own")
+    for name in ogs:
+        img = read_png(os.path.join(d, name), decode=False)
+        if (img.width, img.height) != OG_SIZE:
+            rep.fail(f"{name} is {img.width}x{img.height}; share cards are 1200x630")
+        else:
+            rep.ok(f"{name}: 1200x630")
+
+    path = need("manifest.webmanifest")
+    if path:
+        try:
+            m = json.load(open(path, encoding="utf-8"))
+        except ValueError as exc:
+            rep.fail(f"manifest.webmanifest is not valid JSON: {exc}")
+            return
+        bad = []
+        for key in ("name", "short_name"):
+            v = str(m.get(key, "")).strip()
+            if not v or re.match(r"^\[.*\]$", v) or "TODO" in v.upper():
+                bad.append(f"{key} is empty or a placeholder")
+        icons = m.get("icons") or []
+        declared = {i.get("sizes") for i in icons}
+        for want in ("192x192", "512x512"):
+            if want not in declared:
+                bad.append(f"no {want} icon")
+        if not any("maskable" in str(i.get("purpose", "")) for i in icons):
+            bad.append("no maskable icon")
+        for i in icons:
+            src = os.path.join(d, str(i.get("src", "")).lstrip("/").split("/")[-1])
+            if not os.path.exists(src):
+                bad.append(f"icon {i.get('src')!r} does not exist")
+                continue
+            try:
+                img = read_png(src, decode=False)
+                if i.get("sizes") and i["sizes"] != f"{img.width}x{img.height}":
+                    bad.append(f"{i.get('src')} is {img.width}x{img.height}, "
+                               f"declared {i['sizes']}")
+            except ValueError:
+                pass
+        if bad:
+            rep.fail("manifest.webmanifest: " + "; ".join(bad))
+        else:
+            rep.ok(f"manifest.webmanifest: {len(icons)} icon(s) exist at their declared "
+                   f"sizes, including a maskable one")
+
+
 # ──────────────────────────────────────────────────────────────── all ──
 
 def cmd_all(args: argparse.Namespace, rep: Report) -> None:
@@ -1785,6 +2058,8 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
         for face in faces:
             cmd_fonts(argparse.Namespace(font=os.path.join(fonts_dir, face),
                                          glyphs=args.glyphs, licence=licence), rep)
+
+    cmd_assets(argparse.Namespace(dir=d, assets=args.assets), rep)
 
     tile = os.path.join(d, "style-tile.html")
     if os.path.exists(tile):
@@ -1851,6 +2126,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                    help="viewport widths in CSS px (default 320,1440; 320 is WCAG reflow)")
     r.set_defaults(fn=cmd_render)
 
+    s_ = sub.add_parser("assets", help="logo SVGs, icon set, avatar, share cards, manifest")
+    s_.add_argument("dir", help="brand directory (assets are read from DIR/assets)")
+    s_.add_argument("--assets", help="asset directory, if not DIR/assets")
+    s_.set_defaults(fn=cmd_assets)
+
     a = sub.add_parser("all", help="tokens + contrast + lexicon over a brand directory")
     a.add_argument("dir")
     a.add_argument("--strict", action="store_true")
@@ -1860,6 +2140,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     a.add_argument("--glyphs", help="characters the system relies on, checked in every font "
                                     f"under BRAND_DIR/fonts (default {DEFAULT_GLYPHS})")
     a.add_argument("--widths", default="320,1440", help="render widths (default 320,1440)")
+    a.add_argument("--assets", help="asset directory, if not BRAND_DIR/assets")
     a.set_defaults(fn=cmd_all)
 
     p.add_argument("--version", action="version",
