@@ -22,6 +22,7 @@ __version__ = "1.1.0"
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -86,31 +87,135 @@ class Report:
 # https://www.w3.org/TR/WCAG22/#dfn-relative-luminance
 # https://www.w3.org/TR/WCAG22/#dfn-contrast-ratio
 
-def _srgb(channel8: int) -> float:
-    c = channel8 / 255.0
+RGBA = Tuple[float, float, float, float]   # channels 0-255, alpha 0-1
+
+_HEX = set("0123456789abcdefABCDEF")
+_NAMED = {"white": (255.0, 255.0, 255.0, 1.0), "black": (0.0, 0.0, 0.0, 1.0),
+          "transparent": (0.0, 0.0, 0.0, 0.0)}
+_COLOUR_FN = re.compile(r"^(rgba?|hsla?|oklch)\(\s*(.*?)\s*\)$", re.I | re.S)
+
+
+def _pct_or_num(tok: str, scale: float) -> float:
+    """'50%' -> 0.5 * scale; '0.5' -> 0.5 (already in the target unit)."""
+    tok = tok.strip().lower()
+    if tok == "none":
+        return 0.0
+    if tok.endswith("%"):
+        return float(tok[:-1]) / 100.0 * scale
+    return float(tok)
+
+
+def _hsl_to_rgb(h: float, s: float, l: float) -> Tuple[float, float, float]:
+    # CSS Color 4, sec. 7.1: s and l in 0-1, h in degrees.
+    def f(n: float) -> float:
+        k = (n + h / 30.0) % 12
+        a = s * min(l, 1 - l)
+        return l - a * max(-1.0, min(k - 3, 9 - k, 1.0))
+    return f(0) * 255.0, f(8) * 255.0, f(4) * 255.0
+
+
+def _oklch_to_rgb(L: float, C: float, H: float) -> Tuple[float, float, float]:
+    # Ottosson's OKLab -> linear sRGB matrices, then the sRGB transfer curve.
+    # Out-of-gamut values are clamped, which is what a browser displays.
+    a, b = C * math.cos(math.radians(H)), C * math.sin(math.radians(H))
+    l_ = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3
+    m_ = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3
+    s_ = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3
+    lin = (4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+           -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+           -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_)
+    enc = [12.92 * v if v <= 0.0031308 else 1.055 * v ** (1 / 2.4) - 0.055 for v in lin]
+    r, g, b2 = (max(0.0, min(1.0, v)) * 255.0 for v in enc)
+    return r, g, b2
+
+
+def parse_colour(value: str) -> RGBA:
+    """Parse a CSS colour: hex (3/4/6/8 digits), rgb[a](), hsl[a](), oklch(),
+    white, black or transparent. Alpha is KEPT: a translucent colour is not the
+    colour its hex digits name, and scoring it as opaque is a false pass."""
+    v = value.strip()
+    if v.lower() in _NAMED:
+        return _NAMED[v.lower()]
+    if v.startswith("#"):
+        h = v[1:]
+        if len(h) in (3, 4):
+            h = "".join(ch * 2 for ch in h)
+        if len(h) not in (6, 8) or any(ch not in _HEX for ch in h):
+            raise ValueError(f"not a colour: {value!r}")
+        r, g, b = (float(int(h[i:i + 2], 16)) for i in (0, 2, 4))
+        return r, g, b, (int(h[6:8], 16) / 255.0 if len(h) == 8 else 1.0)
+    m = _COLOUR_FN.match(v)
+    if not m:
+        raise ValueError(f"not a colour: {value!r} (supported: hex, rgb(), hsl(), "
+                         f"oklch(), white, black, transparent)")
+    fn, body = m.group(1).lower(), m.group(2)
+    alpha_tok = None
+    if "/" in body:
+        body, alpha_tok = body.split("/", 1)
+    parts = [p for p in re.split(r"[\s,]+", body.strip()) if p]
+    if alpha_tok is None and len(parts) == 4:
+        parts, alpha_tok = parts[:3], parts[3]
+    if len(parts) != 3:
+        raise ValueError(f"not a colour: {value!r}")
+    try:
+        alpha = _pct_or_num(alpha_tok, 1.0) if alpha_tok is not None else 1.0
+        if fn.startswith("rgb"):
+            r, g, b = (_pct_or_num(p, 255.0) for p in parts)
+        elif fn.startswith("hsl"):
+            hue = float(parts[0].lower().replace("deg", ""))
+            r, g, b = _hsl_to_rgb(hue, _pct_or_num(parts[1], 1.0),
+                                  _pct_or_num(parts[2], 1.0))
+        else:
+            r, g, b = _oklch_to_rgb(_pct_or_num(parts[0], 1.0),
+                                    _pct_or_num(parts[1], 0.4),
+                                    float(parts[2].lower().replace("deg", "")))
+    except ValueError:
+        raise ValueError(f"not a colour: {value!r}") from None
+    return float(r), float(g), float(b), max(0.0, min(1.0, float(alpha)))
+
+
+def composite(fg: RGBA, bg: RGBA) -> RGBA:
+    """Source-over compositing in sRGB space, as browsers render it."""
+    a = fg[3]
+    return (fg[0] * a + bg[0] * (1 - a), fg[1] * a + bg[1] * (1 - a),
+            fg[2] * a + bg[2] * (1 - a), 1.0)
+
+
+def to_hex(c: RGBA) -> str:
+    return "#" + "".join(f"{int(round(max(0.0, min(255.0, x)))):02x}" for x in c[:3])
+
+
+def _srgb(channel: float) -> float:
+    c = channel / 255.0
     return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
 
 
-def parse_hex(value: str) -> Tuple[int, int, int]:
-    h = value.strip().lstrip("#")
-    if len(h) == 3:
-        h = "".join(ch * 2 for ch in h)
-    if len(h) == 8:  # #RRGGBBAA — alpha ignored, see note in ratio()
-        h = h[:6]
-    if len(h) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in h):
-        raise ValueError(f"not a hex colour: {value!r}")
-    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-
-
-def luminance(value: str) -> float:
-    r, g, b = parse_hex(value)
+def luminance(value) -> float:
+    r, g, b, _ = parse_colour(value) if isinstance(value, str) else value
     return 0.2126 * _srgb(r) + 0.7152 * _srgb(g) + 0.0722 * _srgb(b)
 
 
-def ratio(fg: str, bg: str) -> float:
-    l1, l2 = luminance(fg), luminance(bg)
+def resolve_pair(fg: str, bg: str) -> Tuple[RGBA, RGBA]:
+    """Parse a pairing and composite a translucent foreground over its ground.
+
+    A translucent GROUND is refused: whatever shows through it is unknown here,
+    so any ratio would be invented. Declare the composited ground instead.
+    """
+    f, b = parse_colour(fg), parse_colour(bg)
+    if b[3] < 1.0:
+        raise ValueError(f"background {bg!r} is translucent; a contrast ratio needs the "
+                         f"opaque ground it sits on. Declare the composited colour.")
+    return composite(f, b), b
+
+
+def contrast_of(f: RGBA, b: RGBA) -> float:
+    l1, l2 = luminance(f), luminance(b)
     hi, lo = max(l1, l2), min(l1, l2)
     return (hi + 0.05) / (lo + 0.05)
+
+
+def ratio(fg: str, bg: str) -> float:
+    return contrast_of(*resolve_pair(fg, bg))
 
 
 def fmt_ratio(r: float) -> str:
@@ -230,6 +335,85 @@ def _scoped(css: str, pattern: str) -> Tuple[Dict[str, str], List[Tuple[int, int
         pos = end
 
 
+_AT_BLOCK = r"@(?:media|supports|container)\b"
+_DARK_QUERY = re.compile(r"prefers-color-scheme\s*:\s*dark", re.I)
+_DARK_ATTR = r'\[data-theme=["\']dark["\']\]\s*\{'
+
+
+class TokenCSS:
+    """A token file split by where each declaration applies.
+
+    base        declarations outside every at-rule and theme block
+    dark_media  the prefers-color-scheme: dark block
+    dark_attr   the [data-theme="dark"] block
+    media       every other @media/@supports/@container block, with its query
+
+    Everything conditional is kept OUT of base. Only min-width blocks used to
+    be excluded, so a desktop-first file's max-width override silently
+    replaced the base value and reported a false mismatch.
+    """
+
+    def __init__(self, base, dark_media, dark_attr, media):
+        self.base: Dict[str, str] = base
+        self.dark_media: Dict[str, str] = dark_media
+        self.dark_attr: Dict[str, str] = dark_attr
+        self.media: List[Tuple[str, Dict[str, str]]] = media
+
+    @property
+    def dark(self) -> Dict[str, str]:
+        return self.dark_media or self.dark_attr
+
+    def theme(self, name: str) -> Dict[str, str]:
+        """Every token as declared in one theme, before var() resolution."""
+        return dict(self.base) if name == "light" else {**self.base, **self.dark}
+
+    def defined(self) -> set:
+        names = set(self.base) | set(self.dark_media) | set(self.dark_attr)
+        for _, v in self.media:
+            names |= set(v)
+        return names
+
+
+def parse_token_css(css: str) -> TokenCSS:
+    clean = _strip_comments(css)
+    spans: List[Tuple[int, int]] = []
+    dark_media: Dict[str, str] = {}
+    media: List[Tuple[str, Dict[str, str]]] = []
+    pos = 0
+    while True:
+        m = re.search(_AT_BLOCK, clean[pos:])
+        if not m:
+            break
+        start = pos + m.start()
+        query = clean[start:clean.index("{", start)].strip()
+        body, end = _balanced_block(clean, start)
+        found = _vars_in(body)
+        if _DARK_QUERY.search(query):
+            dark_media.update(found)
+        elif found:
+            media.append((" ".join(query.split()), found))
+        spans.append((start, end))
+        pos = end
+    dark_attr, s2 = _scoped(clean, _DARK_ATTR)
+    base_src = clean
+    for a, b in sorted(spans + s2, reverse=True):
+        base_src = base_src[:a] + base_src[b:]
+    return TokenCSS(_vars_in(base_src), dark_media, dark_attr, media)
+
+
+def resolve_var(value: str, table: Dict[str, str], depth: int = 0) -> str:
+    """Resolve var(--x[, fallback]) against one theme's declarations."""
+    if depth > 12:
+        return value
+
+    def sub(m):
+        name, fallback = m.group(1), m.group(2)
+        if name in table:
+            return resolve_var(table[name], table, depth + 1)
+        return resolve_var(fallback.strip(), table, depth + 1) if fallback else m.group(0)
+    return re.sub(r"var\(\s*(--[a-zA-Z][\w-]*)\s*(?:,\s*([^()]*))?\)", sub, value)
+
+
 def _render_value(raw):
     """Reduce a token value to a comparable string.
 
@@ -334,39 +518,98 @@ EXTERNAL_REF = re.compile(
 FONT_HOST = re.compile(r"fonts\.(?:googleapis|gstatic|bunny)\.(?:com|net)", re.I)
 
 
+def _css_urls(css: str) -> List[Tuple[int, str]]:
+    """Every url(...) in a stylesheet, with its offset.
+
+    A quoted value runs to its matching quote, so a data: URI that itself
+    contains url(#id) (an SVG filter reference inside an embedded image) is
+    read as one value, not two.
+    """
+    out, pos = [], 0
+    while True:
+        i = css.find("url(", pos)
+        if i < 0:
+            return out
+        j = i + 4
+        while j < len(css) and css[j] in " \t\n":
+            j += 1
+        if j < len(css) and css[j] in "\"'":
+            q = css[j]
+            k = css.find(q, j + 1)
+            k = len(css) if k < 0 else k
+            out.append((i, css[j + 1:k]))
+            pos = k + 1
+        else:
+            k = css.find(")", j)
+            k = len(css) if k < 0 else k
+            out.append((i, css[j:k].strip()))
+            pos = k + 1
+
+
+def _classify(url: str) -> str:
+    u = url.strip()
+    if u.startswith(("data:", "#", "%23", "mailto:", "tel:")) or not u:
+        return "embedded"
+    if u.startswith(("http://", "https://", "//")):
+        return "font-cdn" if FONT_HOST.search(u) else "remote"
+    return "local"
+
+
 def _check_self_contained(name, text, rep):
     """The artifact must open from disk with no build step and no fetches.
 
     A style tile that silently depends on a CDN looks fine on the machine that
     made it and breaks on the client's laptop, in a locked-down enterprise
-    network, or in an air-gapped review. The permitted exception is a webfont
-    import, because the system is required to work without it anyway.
+    network, or in an air-gapped review. The one tolerated fetch is a webfont
+    CSS @import, and only when every face is ALSO embedded in an @font-face
+    block, because then the import is genuinely optional.
+
+    An @font-face whose src is a URL is not self-hosted, whichever host it
+    names: fonts.gstatic.com is a CDN, and fonts/brand.woff2 is a second file
+    the artifact cannot open without. Embedded means a data: URI.
     """
     external, fonts = [], []
     for m in EXTERNAL_REF.finditer(text):
         url = m.group(1).strip()
-        if url.startswith(("http://", "https://", "//")):
-            (fonts if FONT_HOST.search(url) else external).append(url)
-        elif not url.startswith(("#", "data:", "mailto:", "tel:")):
+        kind = _classify(url)
+        if kind == "font-cdn":
+            fonts.append(url)
+        elif kind in ("remote", "local"):
             external.append(url)          # a local file is still a dependency
-    for u in re.findall(r"@import\s+url\(\s*['\"]?([^'\")]+)", text):
-        (fonts if FONT_HOST.search(u) else external).append(u)
+    styles = "".join(re.findall(r"<style[^>]*>(.*?)</style>", text, flags=re.S | re.I))
+    for u in re.findall(r"@import\s+(?:url\(\s*)?['\"]?([^'\")\s;]+)", styles):
+        (fonts if _classify(u) == "font-cdn" else external).append(u)
+
+    embedded_faces = 0
+    face_iter = list(re.finditer(r"@font-face\s*\{", styles, re.I))
+    face_spans = []
+    for fm in face_iter:
+        body, end = _balanced_block(styles, fm.start())
+        face_spans.append((fm.start(), end))
+        srcs = [u for _, u in _css_urls(body)]
+        kinds = {_classify(u) for u in srcs}
+        if srcs and kinds == {"embedded"}:
+            embedded_faces += 1
+        else:
+            external += [u for u in srcs if _classify(u) != "embedded"]
+    for off, u in _css_urls(styles):
+        if any(a <= off < b for a, b in face_spans) or \
+                styles[max(0, off - 12):off].rstrip().endswith("@import"):
+            continue
+        if _classify(u) != "embedded":
+            external.append(u)
+
     if external:
         rep.fail(f"{name}: not self-contained — {len(external)} external or local "
                  f"dependency(ies): {sorted(set(external))[:4]}. The artifact must open "
-                 f"from disk with no build step and no fetches.")
-
-    # A webfont import is only convenience if the fonts are ALSO self-hosted.
-    # With no @font-face, the CDN *is* the typography, and the artifact silently
-    # loses its typefaces on a locked-down network or in an offline review.
-    face_blocks = len(re.findall(r"@font-face\s*\{", text, re.I))
-    if fonts and face_blocks == 0:
+                 f"from disk with no build step and no fetches; embed fonts as data: URIs.")
+    if fonts and embedded_faces == 0:
         rep.fail(f"{name}: depends on a webfont CDN for its typography — "
-                 f"{len(fonts)} remote import and zero @font-face blocks. Self-host the "
-                 f"faces (or embed them) so the import is genuinely optional; the system "
-                 f"is required to work without it.")
+                 f"{len(fonts)} remote import and zero embedded @font-face blocks. Embed the "
+                 f"faces so the import is genuinely optional; the system is required to "
+                 f"work without it.")
     elif not external:
-        detail = (f"; {len(fonts)} webfont import backed by {face_blocks} self-hosted "
+        detail = (f"; {len(fonts)} webfont import backed by {embedded_faces} embedded "
                   f"@font-face block(s)" if fonts else "")
         rep.ok(f"{name}: self-contained (no external dependencies{detail})")
     if re.search(r"<img\b", text, re.I):
@@ -385,16 +628,8 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
         return
     css = open(css_path, encoding="utf-8").read()
     clean = _strip_comments(css)
-
-    dark_media, s1 = _scoped(clean, r"@media\s*\(prefers-color-scheme:\s*dark\)")
-    dark_attr, s2 = _scoped(clean, r'\[data-theme=["\']dark["\']\]\s*\{')
-    responsive, s3 = _scoped(clean, r"@media\s*\(min-width:")
-    reduced, s4 = _scoped(clean, r"@media\s*\(prefers-reduced-motion:")
-
-    base_src = clean
-    for a, b in sorted(s1 + s2 + s3 + s4, reverse=True):
-        base_src = base_src[:a] + base_src[b:]
-    base = _vars_in(base_src)
+    tok = parse_token_css(css)
+    base, dark_media, dark_attr = tok.base, tok.dark_media, tok.dark_attr
 
     if not base:
         rep.fail("no custom properties found in the CSS — is this a token file?")
@@ -471,9 +706,11 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
                     if a.lower() == b.lower():
                         return True
                     try:
-                        return parse_hex(a) == parse_hex(b)
+                        ca, cb = parse_colour(a), parse_colour(b)
                     except ValueError:
                         return False
+                    return all(abs(x - y) <= 0.5 for x, y in zip(ca[:3], cb[:3])) \
+                        and abs(ca[3] - cb[3]) <= 0.005
 
                 comparable, unresolved = [], []
                 for k in base:
@@ -502,7 +739,7 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
                  f"means downstream tools cannot consume the system")
 
     # 3. var() references resolve, across CSS and any HTML in the directory.
-    defined = set(base) | set(dark_media) | set(dark_attr) | set(responsive) | set(reduced)
+    defined = tok.defined()
     sources = [(os.path.basename(css_path), css)]
     for name in sorted(os.listdir(d)):
         if name.endswith((".html", ".htm")):
@@ -519,7 +756,15 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
     # 4. Colour discipline in markup: raw values outside token declarations.
     for name, text in sources[1:]:
         styles = "".join(re.findall(r"<style[^>]*>(.*?)</style>", text, flags=re.S))
-        without_decls = CSS_VAR.sub("", styles)
+        # Inline style="" and SVG paint attributes bypass the token layer just
+        # as surely as a stylesheet rule does. In SVG, colour with a CSS class.
+        markup = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.S | re.I)
+        inline = " ".join(a or b for a, b in re.findall(
+            r"""\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')""", markup, flags=re.I))
+        paint = " ".join(a or b for a, b in re.findall(
+            r"""\s(?:fill|stroke|stop-color|color|flood-color)\s*=\s*(?:"([^"]*)"|'([^']*)')""",
+            markup, flags=re.I))
+        without_decls = CSS_VAR.sub("", styles) + " " + inline + " " + paint
         raws = [r for r in RAW_COLOUR.findall(without_decls)
                 if r.lower() not in ("#fff", "#ffffff", "#000", "#000000")]
         if raws:
@@ -533,6 +778,28 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
 # ────────────────────────────────────────────────────────────── fonts ──
 
 DEFAULT_GLYPHS = "=≠?→✓·—–…"
+
+
+# A reserved name is declared in a COPYRIGHT line: `... with Reserved Font Name
+# "Plex"`. Every OFL licence also DEFINES the term in its body ('"Reserved Font
+# Name" refers to any names specified as such after the copyright
+# statement(s)'), so matching the bare phrase reports a reserved name for
+# fonts that have none. Only the text before the licence body is searched, and
+# only in the "with Reserved Font Name" form.
+_LICENCE_BODY = re.compile(r"This Font Software is licensed under|^\s*PREAMBLE\s*$", re.M | re.I)
+_RFN_CLAUSE = re.compile(r"with\s+Reserved\s+Font\s+Names?\s+(.+)", re.I)
+_QUOTED_NAME = re.compile(r"[\"\u201c'\u2018]([^\"\u201d'\u2019\n]+)[\"\u201d'\u2019]")
+
+
+def reserved_font_names(licence_text: str) -> List[str]:
+    body = _LICENCE_BODY.search(licence_text)
+    head = licence_text[:body.start()] if body else licence_text
+    names: List[str] = []
+    for line in head.splitlines():
+        m = _RFN_CLAUSE.search(line)
+        if m:
+            names += [n.strip() for n in _QUOTED_NAME.findall(m.group(1)) if n.strip()]
+    return list(dict.fromkeys(names))
 
 
 def cmd_fonts(args: argparse.Namespace, rep: Report) -> None:
@@ -604,9 +871,10 @@ def cmd_fonts(args: argparse.Namespace, rep: Report) -> None:
         if os.path.exists(args.licence):
             text = open(args.licence, encoding="utf-8", errors="replace").read()
             rep.ok(f"licence file present ({os.path.basename(args.licence)})")
-            m = re.search(r'Reserved Font Name[\s:]*["\u201c\u2018]?([^"\u201d\u2019\n)]+)', text)
-            if m:
-                rep.warn(f'declares Reserved Font Name "{m.group(1).strip()}" — subset freely, '
+            names = reserved_font_names(text)
+            if names:
+                shown = ", ".join(f'"{n}"' for n in names)
+                rep.warn(f'declares Reserved Font Name {shown} — subset freely, '
                          f'but any modification to the outlines (or to the name table) requires '
                          f'renaming the derivative')
             else:
@@ -635,12 +903,25 @@ BANNED_WORDS = [
     "best-in-class", "bleeding-edge", "paradigm shift", "synergy",
 ]
 # Patterns that assert proof. Each needs a real, dated referent or it is fabricated.
+_COUNT_NOUNS = (r"(?:customers|clients|companies|teams|users|brands|banks|institutions|"
+                r"fintechs|organi[sz]ations|enterprises|businesses|merchants|partners|"
+                r"lenders|insurers|agencies|developers|members|countries|downloads|installs)")
+_OUTCOMES = (r"(?:accura(?:cy|te)|precision|recall|detection|uptime|availability|"
+             r"reduction|faster|fewer|less|lower|fraud|losses|savings|false[- ]positives?|"
+             r"conversion|roi)")
 PROOF_PATTERNS = [
     (r"\btrusted by\b", "'trusted by' claim"),
     (r"\bSOC\s?2\b", "SOC 2 reference"),
     (r"\bISO\s?27001\b", "ISO 27001 reference"),
-    (r"\b(?:HIPAA|GDPR|PCI[- ]DSS)\s+compliant\b", "compliance claim"),
-    (r"\b\d[\d,]*\+\s*(?:customers|companies|teams|users|brands|clients)\b", "customer-count claim"),
+    (r"\b(?:[A-Z][A-Z0-9-]*\s+|fully\s+)compliant\b|\bcompliant with\b", "compliance claim"),
+    (r"(?:\b\d[\d,.]*\s*[kKmM]?\+|\b(?:over|more than|upwards of)\s+\d[\d,.]*\s*[kKmM]?|"
+     r"\b(?:hundreds|thousands|millions) of)\s*" + _COUNT_NOUNS + r"\b", "customer-count claim"),
+    (r"\b\d+(?:\.\d+)?\s?%\s+(?:\w+\s+){0,2}?" + _OUTCOMES + r"\b|\b" + _OUTCOMES +
+     r"(?:\s+\w+){0,4}?\s+(?:by|of|to|at)\s+(?:up to\s+)?\d+(?:\.\d+)?\s?%|"
+     r"\b\d+(?:\.\d+)?x\s+(?:faster|more|fewer|less|cheaper|better)\b",
+     "performance-metric claim"),
+    (r"\b(?:approved|certified|accredited|endorsed|licensed|audited|backed)\s+by\b|"
+     r"\b[\w]+-(?:approved|certified|accredited|endorsed)\b", "third-party endorsement claim"),
     (r"\b(?:magic quadrant|forrester wave|gartner peer insights)\b", "analyst-recognition claim"),
     (r"\b\d\.\d\s*/\s*5\b", "rating claim"),
     (r"\b(?:award[- ]winning|industry[- ]leading|#1\b)", "superlative proof claim"),
@@ -688,11 +969,11 @@ def _suppressed(line: str, span: Tuple[int, int],
                 context: str = "") -> Optional[str]:
     """Return why this hit is not a violation, or None if it is one.
 
-    `context` is the surrounding lines. A claim's date or attribution often sits
-    on an adjacent line -- HTML wraps, and a markdown table keeps the date in a
-    different cell -- so a strictly line-based test reports correct governance
-    documentation as suspect. Checked against real regulated-industry brand
-    docs, where every such flag was a false positive.
+    `context` is the claim's own unit (see `_units`) plus any footnote it cites.
+    A referent counts only when it is attached to the claim: the same
+    paragraph, list item or table row, or a footnote the claim points at. A
+    date two paragraphs away is not evidence for this sentence, and treating it
+    as evidence let any dated document launder every claim near a date.
     """
     window = context or line
     if WITHHELD.search(window):
@@ -711,25 +992,71 @@ def _suppressed(line: str, span: Tuple[int, int],
     return None
 
 
+# Units: the smallest block a referent can belong to.
+_MD_ITEM = re.compile(r"^\s{0,3}(?:[-*+]|\d+[.)])\s")
+_MD_SINGLE = re.compile(r"^\s{0,3}(?:\||#{1,6}\s|\[\^[^\]]+\]:)")
+_HTML_BLOCK = (r"(?:p|li|h[1-6]|tr|div|section|header|footer|blockquote|figcaption|dd|dt|"
+               r"article|aside|main|nav|table|ul|ol|pre|figure)\b")
+_HTML_OPEN = re.compile(r"<" + _HTML_BLOCK, re.I)
+_HTML_CLOSE = re.compile(r"</" + _HTML_BLOCK + r"|<br\b|<hr\b", re.I)
+_FOOTNOTE_DEF = re.compile(r"^\s{0,3}\[\^([^\]]+)\]:\s*(.*)$")
+_FOOTNOTE_REF = re.compile(r"\[\^([^\]]+)\](?!:)")
+
+
+def _units(lines: List[str], html: bool) -> List[int]:
+    """Give each line a unit id; -1 for blank and fenced lines.
+
+    Markdown: a paragraph (blank-line bounded), one list item with its
+    continuation lines, one table row, one heading, one footnote definition.
+    HTML: from an opening block tag to its closing tag, so a wrapped <p> is one
+    unit and each <li> or <tr> is its own. Table cells share their row.
+    """
+    ids: List[int] = []
+    uid, open_, in_fence = 0, False, False
+    for line in lines:
+        if line.lstrip().startswith("```"):
+            in_fence = not in_fence
+            ids.append(-1)
+            open_ = False
+            continue
+        if in_fence or not line.strip():
+            ids.append(-1)
+            open_ = False
+            continue
+        if html:
+            starts, single = bool(_HTML_OPEN.search(line)), False
+        else:
+            single = bool(_MD_SINGLE.match(line))
+            starts = single or bool(_MD_ITEM.match(line))
+        if starts or not open_:
+            uid += 1
+        ids.append(uid)
+        open_ = not single and not (html and _HTML_CLOSE.search(line))
+    return ids
+
+
 def _scan_text(path: str, text: str, rep: Report, strict: bool,
                show_all: bool) -> Tuple[int, int, int]:
     words = proofs = suppressed = 0
-    in_fence = False
     all_lines = text.splitlines()
-    for i, line in enumerate(all_lines, 1):
-        # A referent usually FOLLOWS its claim -- a definition list, a table row,
-        # a footnote -- so the forward window is wider than the backward one.
-        window = "\n".join(all_lines[max(0, i - 3):i + 8])
-        if line.lstrip().startswith("```"):
-            in_fence = not in_fence
+    ids = _units(all_lines, html=path.endswith((".html", ".htm")))
+    unit_text: Dict[int, str] = {}
+    for line, uid in zip(all_lines, ids):
+        if uid >= 0:
+            unit_text[uid] = unit_text.get(uid, "") + line + "\n"
+    notes = {m.group(1): m.group(2) for m in map(_FOOTNOTE_DEF.match, all_lines) if m}
+
+    checks = [(re.compile(rf"\b{re.escape(w)}\b", re.I), f"banned term '{w}'", True)
+              for w in BANNED_WORDS]
+    checks += [(re.compile(pat, re.I), label, False) for pat, label in PROOF_PATTERNS]
+    for i, (line, uid) in enumerate(zip(all_lines, ids), 1):
+        if uid < 0:
             continue
-        if in_fence:
-            continue
-        checks = [(re.compile(rf"\b{re.escape(w)}\b", re.I), f"banned term '{w}'", True)
-                  for w in BANNED_WORDS]
-        checks += [(re.compile(pat, re.I), label, False) for pat, label in PROOF_PATTERNS]
+        unit = unit_text[uid]
+        window = unit + "".join(notes.get(ref, "") + "\n"
+                                for ref in _FOOTNOTE_REF.findall(unit))
         for rx, label, is_word in checks:
-            for m in rx.finditer(line):
+            for m in list(rx.finditer(line))[:1]:      # one report per line and label
                 why = _suppressed(line, m.span(), window)
                 if why:
                     suppressed += 1
@@ -795,7 +1122,7 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
                                    show_suppressed=args.show_suppressed), rep)
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(
         prog="brandcheck",
         description="Mechanical verification for a brand system.",
@@ -837,7 +1164,7 @@ def main() -> int:
 
     p.add_argument("--version", action="version",
                    version=f"brandcheck {__version__}")
-    args = p.parse_args()
+    args = p.parse_args(argv)
     rep = Report()
     args.fn(args, rep)
     return rep.verdict()
