@@ -9,9 +9,13 @@
 #   python3 scripts/brandcheck.py all BRAND_DIR
 #   python3 scripts/brandcheck.py lexicon SITE_DIR --claims BRAND_DIR/forbidden-claims.txt
 #
-# Negation words and dates do not clear a forbidden claim: "Bank-grade
-# controls, audit pending" still makes it. Quotation marks do, which is how a
-# prohibition list names what it forbids: Never write "bank-grade".
+# Three things clear a hit, and only three:
+#   a quoted phrase inside a prohibition     Never write "bank-grade".
+#   an evidence label on someone else's copy  Acme: "bank-grade" [OBSERVED 2026-09-01]
+#   a denial directly before the phrase       We are not yet regulator-approved.
+# Quotation alone clears nothing (Our "bank-grade" controls is the claim), and
+# neither do dates, negation elsewhere in the line, or [Assumption] labels.
+# List the rewordings as well: "approved by regulators" needs its own re: line.
 #
 # Replace the example below with this company's own list.
 # <phrase>	<reason: what would have to be true first, and as of when it is not>

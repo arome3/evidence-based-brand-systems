@@ -50,10 +50,11 @@ The mark is the element that must work at 16px, so it is built for 16px first.
 
 ```bash
 python3 scripts/brandassets.py icons assets/mark.svg --out assets --name "Brand" \
-  --bg "#07110f" --fg "#f0efe9" --dark-bg "#f0efe9" --dark-fg "#07110f" --radius 0.18
+  --bg --b-color-bg-page --fg --b-color-text-primary \
+  --dark-bg --b-color-bg-page --dark-fg --b-color-text-primary --radius 0.18
 ```
 
-The ground must be opaque; the command refuses a translucent one. `--padding` sets the margin around the mark on the square icons. The maskable icon and the avatar ignore it: each fits the mark's bounding-box *diagonal* inside its circle, so no corner of the art can be cut, however wide the mark is. The ground and ink come from the palette tokens; take the values from `tokens.css`, never from memory.
+Name tokens, not colours: `--bg`/`--fg` resolve in the light theme and `--dark-*` in the dark theme, from `tokens.css` beside the `assets/` directory (or `--tokens PATH`). A typed hex stays that hex after the palette moves. The ground must be opaque; the command refuses a translucent one. `--padding` sets the margin around the mark on the square icons. The maskable icon and the avatar ignore it: each fits the mark's bounding-box *diagonal* inside its circle, so no corner of the art can be cut, however wide the mark is. Every PNG carries a provenance record: the source file's sha256 and the tokens it was rendered with. `brandcheck assets` fails a PNG whose mark, page or colour token has changed since it was rendered ("stale"), so a forgotten re-export cannot pass as current.
 
 ## Share card and avatar
 
@@ -63,7 +64,7 @@ The share card is an HTML page, `og-card.html` (template: `templates/og-card.htm
 python3 scripts/brandassets.py png og-card.html --size 1200x630 -o assets/og-default.png
 ```
 
-Keep `og-card.html` in the brand directory. `brandcheck` then scans its copy with the lexicon and the forbidden claims, and checks its colours against the tokens like any other artifact. A share card is often the first thing anyone sees of the company, so it carries no proof the company has not earned, the same as every other surface. Make one card per page that makes a distinct argument; the default card says plainly what the company does.
+Keep `og-card.html` in the brand directory. `brandcheck` then scans its copy with the lexicon and the forbidden claims, compares its pasted tokens with `tokens.css`, and `all` renders it as it is (`render --as-is`), so its pairings must be declared like the tile's. A share card is often the first thing anyone sees of the company, so it carries no proof the company has not earned, the same as every other surface. Make one card per page that makes a distinct argument; the default card says plainly what the company does.
 
 ## Review by eye, then verify
 
@@ -72,4 +73,4 @@ python3 scripts/brandassets.py sheet assets     # writes assets/asset-sheet.html
 python3 scripts/brandcheck.py assets BRAND_DIR
 ```
 
-Open the sheet and answer, in the design-system self-review: does the mark read at 16px on both grounds, does the wordmark hold at its stated minimum size, and does any crop cut the art? The checker proves the files are well-formed. Only a person can say they are legible.
+Keep `asset-sheet.html` beside the assets as the record that the review happened; do not deploy it. Open the sheet and answer, in the design-system self-review: does the mark read at 16px on both grounds, does the wordmark hold at its stated minimum size, and does any crop cut the art? The checker proves the files are well-formed. Only a person can say they are legible.

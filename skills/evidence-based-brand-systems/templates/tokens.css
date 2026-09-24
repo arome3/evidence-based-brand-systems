@@ -32,8 +32,10 @@
   --b-core-accent-700:  #______;   /* light-theme accent */
 }
 
-/* ----------------------------------------------------- 2. SEMANTIC — LIGHT */
-:root {
+/* ----------------------------------------------------- 2. SEMANTIC — LIGHT
+   [data-theme="light"] lets a light panel inside a dark page get its values
+   back; the style tile shows both themes at once. */
+:root, [data-theme="light"] {
   color-scheme: light;
 
   --b-color-bg-page:      var(--b-core-neutral-100);
@@ -69,7 +71,7 @@
     --b-color-text-on-accent: var(--b-core-neutral-950);
   }
 }
-:root[data-theme="dark"] {
+:root[data-theme="dark"], [data-theme="dark"] {
   color-scheme: dark;
   --b-color-bg-page:        var(--b-core-neutral-950);
   --b-color-bg-surface:     var(--b-core-neutral-800);

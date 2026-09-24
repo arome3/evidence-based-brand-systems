@@ -106,3 +106,44 @@ def test_the_review_sheet_is_self_contained(ba_run, fixture_font, tmp_path):
     html = (a / "asset-sheet.html").read_text()
     assert "data:image/png;base64," in html
     assert not re.search(r"""(?:src|href)=["'](?!data:|#)""", html)
+
+
+def test_icon_colours_can_name_tokens(ba, tmp_path):
+    # Iron Law 4: the icon ground and ink are tokens, not copied hex values.
+    (tmp_path / "tokens.css").write_text(
+        ":root { --b-ground: #07110f; --b-ink: #f0efe9; }\n"
+        ":root[data-theme='dark'] { --b-ground: #f0efe9; --b-ink: #07110f; }\n")
+    colours = ba.resolve_icon_colours(tmp_path / "tokens.css", "--b-ground", "--b-ink",
+                                      "--b-ground", "--b-ink")
+    assert colours == ("#07110f", "#f0efe9", "#f0efe9", "#07110f")
+
+
+@browser
+def test_a_share_card_rendered_before_its_page_changed_is_stale(run, ba_run, fixture_font, tmp_path):
+    a = tmp_path / "assets"
+    a.mkdir()
+    (a / "mark.svg").write_text(MARK_SVG)
+    ba_run("wordmark", fixture_font, "--text", "RAV", "-o", a / "wordmark.svg")
+    ba_run("icons", a / "mark.svg", "--out", a, "--name", "Brand", "--bg", "#07110f",
+           "--fg", "#f0efe9")
+    card = tmp_path / "og-card.html"
+    card.write_text("<!doctype html><html><body style='margin:0;background:#07110f'>A</body></html>")
+    ba_run("png", card, "--size", "1200x630", "-o", a / "og-default.png")
+    code, out = run("assets", tmp_path)
+    assert code == 0, out
+    card.write_text("<!doctype html><html><body style='margin:0;background:#07110f'>B</body></html>")
+    code, out = run("assets", tmp_path)
+    assert code == 1
+    assert "stale" in out and "og-default.png" in out
+
+
+@browser
+def test_icons_rendered_before_the_mark_changed_are_stale(run, ba_run, fixture_font, tmp_path):
+    a = tmp_path / "assets"
+    a.mkdir()
+    (a / "mark.svg").write_text(MARK_SVG)
+    ba_run("icons", a / "mark.svg", "--out", a, "--name", "Brand", "--bg", "#07110f",
+           "--fg", "#f0efe9")
+    (a / "mark.svg").write_text(MARK_SVG.replace("M16 16h32v32H16z", "M20 20h24v24H20z"))
+    code, out = run("assets", tmp_path)
+    assert "stale" in out and "mark.svg" in out

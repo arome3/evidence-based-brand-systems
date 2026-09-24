@@ -242,6 +242,51 @@ def tile_svg(vb, inner: str, size: int, fg: str, bg: str, dark_fg: Optional[str]
             f'scale({s:.6f})">{inner}</g></svg>')
 
 
+def resolve_icon_colours(tokens_path, bg: str, fg: str, dark_bg: Optional[str] = None,
+                         dark_fg: Optional[str] = None) -> Tuple[Optional[str], ...]:
+    """Icon colours as hex; a value starting with -- names a token.
+
+    Iron Law 4 reaches the icons too: a ground typed as hex stays that hex
+    after the palette moves. bg/fg resolve in the light theme, dark_* in dark.
+    """
+    tok = None
+
+    def one(value, theme):
+        nonlocal tok
+        if value is None:
+            return None
+        if value.strip().startswith("--"):
+            if tok is None:
+                if not tokens_path or not os.path.exists(tokens_path):
+                    raise ValueError(f"{value} names a token, but there is no tokens.css "
+                                     f"(pass --tokens PATH)")
+                tok = bc.parse_token_css(pathlib.Path(tokens_path).read_text(encoding="utf-8"))
+            value = bc.resolve_var(f"var({value.strip()})", tok.theme(theme))
+            if "var(" in value:
+                raise ValueError(f"unknown token in the {theme} theme: {value}")
+        return bc.to_hex(bc.parse_colour(value)) if bc.parse_colour(value)[3] >= 1.0 \
+            else value
+    return (one(bg, "light"), one(fg, "light"), one(dark_bg, "dark"), one(dark_fg, "dark"))
+
+
+def with_record(png: bytes, record: dict) -> bytes:
+    """Embed a provenance record in a PNG tEXt chunk, before IEND.
+
+    `brandcheck assets` reads it back to prove the PNG still matches its
+    source file and colour tokens, so a stale export cannot pass as current.
+    """
+    import zlib
+    data = b"brandassets\x00" + json.dumps(record, sort_keys=True).encode("latin-1")
+    chunk = (struct.pack(">I", len(data)) + b"tEXt" + data +
+             struct.pack(">I", zlib.crc32(b"tEXt" + data) & 0xFFFFFFFF))
+    at = png.rfind(b"IEND") - 4
+    return png[:at] + chunk + png[at:]
+
+
+def _sha256(path) -> str:
+    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+
 def ico(images: List[Tuple[int, bytes]]) -> bytes:
     """PNG-in-ICO container (supported by every browser that reads ICO)."""
     head = struct.pack("<HHH", 0, 1, len(images))
@@ -291,7 +336,14 @@ class _Browser:
 def cmd_icons(args, rep: bc.Report) -> None:
     out = pathlib.Path(args.out)
     rep.section(f"ICONS · {args.mark} -> {out}")
+    tokens_path = args.tokens or str(out.parent / "tokens.css")
+    names = [(args.bg, "light"), (args.fg, "light"), (args.dark_bg, "dark"), (args.dark_fg, "dark")]
     try:
+        args.bg, args.fg, args.dark_bg, args.dark_fg = resolve_icon_colours(
+            tokens_path, args.bg, args.fg, args.dark_bg, args.dark_fg)
+        used = [(n.strip(), theme, v) for (n, theme), v in
+                zip(names, (args.bg, args.fg, args.dark_bg, args.dark_fg))
+                if n and n.strip().startswith("--")]
         for c in (args.bg, args.dark_bg):
             if c and bc.parse_colour(c)[3] < 1.0:
                 raise ValueError(f"the icon ground {c} must be opaque: iOS paints "
@@ -325,8 +377,10 @@ def cmd_icons(args, rep: bc.Report) -> None:
     except RuntimeError as exc:
         rep.fail(f"cannot render the icon set: {exc}")
         return
+    record = {"source": os.path.relpath(args.mark, out), "sha256": _sha256(args.mark),
+              "tokens": used}
     for name, blob in files.items():
-        (out / name).write_bytes(blob)
+        (out / name).write_bytes(with_record(blob, record) if name.endswith(".png") else blob)
 
     theme = bc.to_hex(bc.parse_colour(args.bg))
     manifest = {
@@ -376,8 +430,9 @@ def cmd_png(args, rep: bc.Report) -> None:
         return
     out = pathlib.Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(blob)
-    rep.ok(f"wrote {out} ({w}x{h}, rendered offline)")
+    out.write_bytes(with_record(blob, {"source": os.path.relpath(args.page, out.parent),
+                                       "sha256": _sha256(args.page)}))
+    rep.ok(f"wrote {out} ({w}x{h}, rendered offline, source recorded)")
 
 
 # ────────────────────────────────────────────────────────────── sheet ──
@@ -476,10 +531,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     i.add_argument("--out", required=True)
     i.add_argument("--name", required=True, help="the product name for the manifest")
     i.add_argument("--short-name")
-    i.add_argument("--bg", required=True, help="opaque ground colour")
-    i.add_argument("--fg", required=True, help="ink colour for currentColor paths")
-    i.add_argument("--dark-bg", help="icon.svg ground under a dark OS theme")
-    i.add_argument("--dark-fg", help="icon.svg ink under a dark OS theme")
+    i.add_argument("--bg", required=True,
+                   help="opaque ground: a token name (--b-color-bg-page) or a colour")
+    i.add_argument("--fg", required=True, help="ink for currentColor paths: a token or a colour")
+    i.add_argument("--dark-bg", help="icon.svg ground under a dark OS theme (dark-theme token)")
+    i.add_argument("--dark-fg", help="icon.svg ink under a dark OS theme (dark-theme token)")
+    i.add_argument("--tokens", help="tokens.css for token names (default: beside --out's parent)")
     i.add_argument("--padding", type=float, default=0.125, help="padding as a fraction of size")
     i.add_argument("--radius", type=float, default=0.0,
                    help="corner radius as a fraction of size (favicon, icon.svg, 192/512)")

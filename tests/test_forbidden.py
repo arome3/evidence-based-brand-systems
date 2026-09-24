@@ -67,3 +67,59 @@ def test_all_picks_up_the_claims_file(run, write, tmp_path):
     write("01.md", "Bank-grade.\n")
     code, out = run("all", tmp_path)
     assert "forbidden claim" in out
+
+
+def test_quoting_a_forbidden_claim_while_making_it_still_fails(run, write, tmp_path):
+    # Quotation clears a forbidden claim only inside a prohibition or labelled
+    # research, never when the sentence is making the claim.
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", 'Our "bank-grade" controls, from day one.\n')
+    code, out = run("lexicon", tmp_path)
+    assert code == 1
+
+
+def test_labelled_research_may_quote_a_competitors_claim(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("02.md", 'Acme hero copy: "bank-grade reconciliation" [OBSERVED 2026-09-01]\n')
+    code, out = run("lexicon", tmp_path)
+    assert code == 0, out
+
+
+def test_script_and_data_sources_are_scanned(run, write, tmp_path):
+    write("site/forbidden-claims.txt", CLAIMS)
+    write("site/src/copy.ts", "export const hero = 'Bank-grade from day one';\n")
+    write("site/src/strings.json", '{"hero": "Regulator approved"}\n')
+    code, out = run("lexicon", tmp_path / "site")
+    assert "copy.ts:1 forbidden claim" in out
+    assert "strings.json:1 forbidden claim" in out
+
+
+def test_all_requires_a_claims_file(run, write, tmp_path):
+    write("tokens.css", ":root { --b-c: #000000; --b-p: #ffffff; }\n")
+    write("pairs.tsv", "t\t--b-c\t--b-p\tnormal\n")
+    code, out = run("all", tmp_path)
+    assert code == 1
+    assert "forbidden-claims.txt" in out
+
+
+def test_an_honest_denial_is_not_the_claim(run, write, tmp_path):
+    # Stage honesty says what the company is NOT yet; the gate must allow it.
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", "Harbourline is not yet regulator-approved.\n\n"
+                      "Our controls are not bank-grade, and we say so.\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 0, out
+
+
+def test_a_negation_elsewhere_in_the_line_does_not_clear_it(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", "Not a toy: bank-grade from day one.\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 1
+
+
+def test_an_assumption_label_does_not_clear_a_forbidden_claim(run, write, tmp_path):
+    write("forbidden-claims.txt", CLAIMS)
+    write("index.md", "[Assumption] Bank-grade reconciliation for every team.\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 1

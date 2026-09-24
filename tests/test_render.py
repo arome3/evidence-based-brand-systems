@@ -119,3 +119,70 @@ def test_a_surface_the_dark_theme_forgot_fails_when_rendered(run, write):
     code, out = run("render", page)
     assert code == 1
     assert "dark" in out and "Card copy." in out
+
+
+def test_as_is_renders_a_single_theme_page_against_every_declared_pair(run, write):
+    # A share card pastes one theme's tokens and is rendered once, as it is.
+    card = ("<!doctype html><html><head><style>body{margin:0;width:1200px;height:630px;"
+            "background:#0b0b0b;color:#eeeeee}</style></head><body><h1>Card</h1></body></html>")
+    write("tokens.css", TOKENS)
+    write("pairs.tsv", PAIRS)
+    page = write("og-card.html", card)
+    code, out = run("render", page, "--as-is", "--widths", "1200")
+    assert code == 0, out
+
+
+def test_all_renders_the_share_card_as_is(run, write, tmp_path):
+    write("tokens.css", TOKENS)
+    write("pairs.tsv", PAIRS)
+    write("forbidden-claims.txt", "bank-grade\tno assessment\n")
+    write("style-tile.html", tile())
+    write("og-card.html", "<!doctype html><html><head><style>body{margin:0;width:1200px;"
+          "height:630px;background:#0b0b0b;color:#777777}</style></head>"
+          "<body><h1>Card</h1></body></html>")
+    code, out = run("all", tmp_path)
+    assert "RENDER · " in out and "og-card.html" in out
+    assert "undeclared pairing #777777 on #0b0b0b" in out
+
+
+# Panels need token blocks that cascade into a subtree: the dark block also
+# matches [data-theme="dark"], and a light panel re-declares the light values.
+CASCADE_TOKENS = TOKENS.replace(':root[data-theme="dark"] {',
+                                ':root[data-theme="dark"], [data-theme="dark"] {') + (
+    '[data-theme="light"] { --b-color-text: var(--b-core-ink); --b-color-bg: var(--b-core-paper);'
+    ' --b-color-border-control: var(--b-core-line); --b-color-focus-ring: var(--b-core-focus); }\n')
+
+
+def test_a_theme_locked_panel_is_judged_by_its_own_theme(run, write):
+    # The style tile shows both themes at once; a dark panel on a light page
+    # must match the dark pairings, not fail as undeclared in the light pass.
+    write("tokens.css", CASCADE_TOKENS)
+    write("pairs.tsv", PAIRS)
+    page = write("style-tile.html", tile(
+        "[data-theme] { background: var(--b-color-bg); color: var(--b-color-text); }",
+        body='<p>Page.</p><div data-theme="dark"><p>Dark panel.</p></div>'
+             '<div data-theme="light"><p>Light panel.</p></div>').replace(
+        TOKENS, CASCADE_TOKENS))
+    code, out = run("render", page)
+    assert code == 0, out
+
+
+def test_a_served_page_can_be_rendered_by_url(run, write, tmp_path):
+    import functools
+    import http.server
+    import threading
+    write("tokens.css", TOKENS)
+    write("pairs.tsv", PAIRS)
+    write("site/index.html", tile())
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler,
+                                directory=str(tmp_path / "site"))
+    handler.log_message = lambda *a, **k: None
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{server.server_address[1]}/index.html"
+        code, out = run("render", url, "--pairs", tmp_path / "pairs.tsv")
+    finally:
+        server.shutdown()
+    assert code == 0, out
+    assert "all declared" in out

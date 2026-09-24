@@ -74,13 +74,22 @@ Templates for all of these: `templates/`.
 
 ## Verify
 
+This is THE stage 6 sequence; the references point here. `scripts/` is the skill's own directory until the copies land in `BRAND_DIR/scripts/`.
+
 ```bash
 python3 scripts/brandcheck.py export BRAND_DIR          # after every tokens.css edit
-python3 scripts/brandcheck.py all BRAND_DIR --glyphs "=≠?→✓"
+python3 scripts/brandcheck.py all BRAND_DIR --glyphs "<every special glyph the UI uses>" [--strict]
 python3 scripts/brandassets.py sheet BRAND_DIR/assets   # then review asset-sheet.html by eye
 ```
 
-`all` runs tokens, contrast, lexicon with the forbidden claims, every font in `fonts/` against its licence, the asset set, and the rendered layer (`render`: every painted pairing declared and passing, in both themes at 320 and 1440px, plus overflow, focus and reduced motion). Pass `--glyphs` the characters the system actually relies on. For a company with no public proof yet, add `--strict` so unreferenced proof claims fail instead of warn. `render` and the raster assets need Playwright with Chromium; `wordmark` needs uharfbuzz. If `all` warns that the rendered layer did not run, Iron Law 1 is unverified: that is not a pass.
+`all` runs tokens (including every pasted token block against `tokens.css`), contrast, lexicon with the forbidden claims, every font in `fonts/` against its licence, the asset set (including whether each PNG still matches its source), and the rendered layer: the style tile in both themes at 320 and 1440px and the share card as it is, every painted pairing declared and passing, plus overflow, focus and reduced motion. It fails when `tokens.json`, `forbidden-claims.txt` or `style-tile.html` is missing, and when the rendered layer cannot run; `--no-render` skips it knowingly, and that run proves less. `--glyphs` takes the characters the system actually relies on (the default is `=≠?→✓·—–…`). `--strict` makes unreferenced proof claims fail instead of warn: use it for any company with no public proof yet. `render` and the raster assets need Playwright with Chromium; `wordmark` needs uharfbuzz.
+
+**Every page that ships gets the same gates**, including a landing page kept elsewhere:
+
+```bash
+python3 scripts/brandcheck.py lexicon SITE_DIR --claims BRAND_DIR/forbidden-claims.txt --strict
+python3 scripts/brandcheck.py render http://localhost:3000/ --pairs BRAND_DIR/pairs.tsv
+```
 
 Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it cannot judge — differentiation, strategic fit, whether the thing is any good — is the adversarial review in `references/verification.md`. Both are required.
 
@@ -101,6 +110,7 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 | "I'll put the hex values in pairs.tsv" | A copied hex keeps passing after the token changes. Name the token. |
 | "The render step needs a browser; the static checks passed" | Then no check proves every painted pairing is declared. Install Chromium. A warning is not a pass. |
 | "The logo is just the name in the brand font" | Live text renders in whatever font the viewer has. Outline it with `brandassets wordmark`, and build the rest of the set. |
+| "It's in quotation marks, so the checker lets it through" | Quotation clears a forbidden claim only inside a prohibition ("Never write..."). Our "bank-grade" controls is the claim. |
 | "The strategy documents don't say, so I'll use my judgement" | Unknowns are flagged as open decisions for the owner, never filled with something plausible. |
 
 ## Red flags — stop and re-ground
@@ -115,7 +125,9 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 - The words "obviously", "clearly", or "should be fine" attached to a measurable claim
 - A `tokens.json` you typed, or a hex value you copied into `pairs.tsv`
 - A logo file with `<text>` in it, or a guideline naming an asset that `assets/` does not hold
-- A forbidden phrase in a guideline without quotation marks around it
+- A forbidden phrase in a guideline without quotation marks around it, or in quotation marks anywhere that is not forbidding it
+- A hex value typed into `brandassets icons` instead of a token name
+- `--no-render`, or a run that did not render, reported as a pass
 
 ## Reference routing
 

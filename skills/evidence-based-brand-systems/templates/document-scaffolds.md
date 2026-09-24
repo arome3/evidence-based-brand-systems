@@ -126,9 +126,10 @@ When a rule is later reversed, **amend in place and say so**. A silently edited 
 ## Parent relationship  lockup · placement · size · clear space · when required/omitted
 ## Partners             co-branding posture; for a pre-launch company the slot
                         DOES NOT EXIST
-## Prohibited           everything that must never appear. Quote every forbidden phrase:
-                        the lexicon gate clears a forbidden claim only inside quotation
-                        marks, and the same phrases live in forbidden-claims.txt
+## Prohibited           everything that must never appear. Quote every forbidden phrase
+                        inside the prohibition ("Never write ..."): the gate clears a
+                        forbidden claim only there, and the same phrases live in
+                        forbidden-claims.txt
 ```
 
 ---

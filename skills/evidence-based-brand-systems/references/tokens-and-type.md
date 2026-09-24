@@ -50,7 +50,7 @@ Ship **both** mechanisms, or an explicit user choice cannot beat the system pref
 :root[data-theme="dark"] { /* … */ }
 ```
 
-The `:not([data-theme="light"])` guard is what lets an explicit light choice win over a dark OS preference. Set `color-scheme` in both blocks so native controls, scrollbars and form widgets follow. **The two blocks must define identical values** — `brandcheck tokens` verifies this, because a page that disagrees with itself about what dark means is a bug nobody finds until a user reports it.
+The `:not([data-theme="light"])` guard is what lets an explicit light choice win over a dark OS preference. For theme-locked panels (the style tile shows both themes at once), the attribute blocks must also match a subtree: write the light semantic block as `:root, [data-theme="light"]` and the dark one as `:root[data-theme="dark"], [data-theme="dark"]`, so a `<div data-theme="dark">` gets the dark values and a light panel inside a dark page gets the light ones back. `brandcheck render` judges each locked panel against its own theme's pairings. Set `color-scheme` in both blocks so native controls, scrollbars and form widgets follow. **The two blocks must define identical values** — `brandcheck tokens` verifies this, because a page that disagrees with itself about what dark means is a bug nobody finds until a user reports it.
 
 ## One authored format
 

@@ -40,3 +40,61 @@ def test_all_fails_a_bundled_font_without_its_licence(run, write, tmp_path, fixt
     code, out = run("all", tmp_path)
     assert code == 1
     assert "licence" in out
+
+
+def claims(write):
+    write("forbidden-claims.txt", "bank-grade\tno assessment\n")
+
+
+def test_all_fails_without_a_style_tile(run, write, tmp_path):
+    brand(write)
+    claims(write)
+    code, out = run("all", tmp_path)
+    assert code == 1
+    assert "style-tile.html" in out
+
+
+def test_all_fails_when_the_rendered_layer_cannot_run(run, write, tmp_path, monkeypatch, bc):
+    brand(write)
+    claims(write)
+    write("style-tile.html", "<!doctype html><html><body><p>x</p></body></html>")
+    monkeypatch.setattr(bc, "playwright_ready", lambda: "no browser in this test")
+    code, out = run("all", tmp_path)
+    assert code == 1
+    assert "FAIL  the rendered layer did not run" in out
+
+
+def test_all_can_skip_render_only_when_told_to(run, write, tmp_path, monkeypatch, bc):
+    brand(write)
+    claims(write)
+    write("style-tile.html", "<!doctype html><html><body><p>x</p></body></html>")
+    monkeypatch.setattr(bc, "playwright_ready", lambda: "no browser in this test")
+    code, out = run("all", tmp_path, "--no-render")
+    assert "skipped by request" in out
+    assert "did not run" not in out
+
+
+def test_all_help_lists_what_all_runs(run, capsys, bc):
+    import pytest as _pytest
+    with _pytest.raises(SystemExit):
+        bc.main(["all", "--help"])
+    out = capsys.readouterr().out
+    assert "tokens, contrast, lexicon, fonts, assets and render" in " ".join(out.split())
+
+
+def test_all_fails_without_a_generated_tokens_json(run, write, tmp_path):
+    brand(write)
+    claims(write)
+    code, out = run("all", tmp_path, "--no-render")
+    assert "FAIL  no tokens.json" in out
+
+
+def test_all_fails_a_hand_written_tokens_json(run, write, tmp_path):
+    brand(write)
+    claims(write)
+    write("tokens.json", '{"b":{"ink":{"$type":"color","$value":{"colorSpace":"srgb",'
+                         '"components":[0.066667,0.066667,0.066667],"hex":"#111111"}},'
+                         '"paper":{"$type":"color","$value":{"colorSpace":"srgb",'
+                         '"components":[1,1,1],"hex":"#ffffff"}}}}')
+    code, out = run("all", tmp_path, "--no-render")
+    assert "FAIL  tokens.json was not produced by `brandcheck export`" in out

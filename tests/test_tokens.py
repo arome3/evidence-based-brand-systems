@@ -66,3 +66,35 @@ def test_dark_theme_blocks_that_disagree_fail(run, write, tmp_path):
     code, out = run("tokens", tmp_path)
     assert code == 1
     assert "disagree" in out
+
+
+def test_a_pasted_token_block_that_drifted_from_tokens_css_fails(run, write, tmp_path):
+    write("tokens.css", BASE_CSS)
+    write("style-tile.html", "<!doctype html><html><head><style>"
+          ":root { --b-color-bg: #ffffff; --b-color-text: #222222; }"
+          "body { background: var(--b-color-bg); color: var(--b-color-text); }"
+          "</style></head><body><p>x</p></body></html>")
+    code, out = run("tokens", tmp_path)
+    assert code == 1
+    assert "--b-color-text" in out and "drift" in out
+
+
+def test_a_pasted_token_block_that_matches_passes(run, write, tmp_path):
+    write("tokens.css", BASE_CSS)
+    write("style-tile.html", "<!doctype html><html><head><style>" + BASE_CSS +
+          "body { background: var(--b-color-bg); color: var(--b-color-text); }"
+          "</style></head><body><p>x</p></body></html>")
+    code, out = run("tokens", tmp_path)
+    assert code == 0, out
+
+
+def test_theme_panel_token_blocks_are_compared_too(run, write, tmp_path):
+    write("tokens.css", BASE_CSS + ':root[data-theme="dark"], [data-theme="dark"] '
+                                   "{ --b-color-text: #eeeeee; }\n")
+    write("style-tile.html", "<!doctype html><html><head><style>" + BASE_CSS +
+          '[data-theme="dark"] { --b-color-text: #dddddd; }'
+          "body { background: var(--b-color-bg); color: var(--b-color-text); }"
+          "</style></head><body><p>x</p></body></html>")
+    code, out = run("tokens", tmp_path)
+    assert code == 1
+    assert "--b-color-text (dark)" in out

@@ -13,9 +13,12 @@
 @font-face { font-family: "<FAMILY>"; font-weight: 100 900; font-display: swap;
              src: url(data:font/woff2;base64,<BASE64>) format("woff2"); }
 
-/* ===== TOKENS — paste from tokens.css. Component CSS uses var() only. ===== */
-:root { /* core → semantic, light */ }
-[data-theme="dark"] { /* semantic remap only */ }
+/* ===== TOKENS — paste from tokens.css. Component CSS uses var() only. =====
+   brandcheck compares this copy with tokens.css and fails any drift, so
+   re-paste after every token edit. Keep the panel-cascading selectors. */
+:root { /* core */ }
+:root, [data-theme="light"] { /* semantic, light */ }
+:root[data-theme="dark"], [data-theme="dark"] { /* semantic remap only */ }
 @media (min-width:768px) { :root { /* responsive type + spacing tokens */ } }
 @media (prefers-reduced-motion:reduce) {
   :root { /* every duration token → 0ms */ }

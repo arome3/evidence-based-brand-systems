@@ -9,6 +9,9 @@ design: see references/verification.md.
     brandcheck tokens    DIR                  CSS <-> JSON agreement, themes, var() resolution
     brandcheck fonts     FONT.ttf [--glyphs …] glyph coverage, OT features, axes
     brandcheck lexicon   DIR                  banned words + fabricated-proof patterns
+    brandcheck export    DIR                  generate tokens.json from tokens.css
+    brandcheck render    PAGE.html            painted pairings, overflow, focus, motion
+    brandcheck assets    DIR                  logo SVGs, icon set, avatar, share cards
     brandcheck all       DIR                  everything above that applies
 
 Exit code is 0 only if every check passed. Non-zero means do not ship.
@@ -919,6 +922,7 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
     clean = _strip_comments(css)
     tok = parse_token_css(css)
     base, dark_media, dark_attr = tok.base, tok.dark_media, tok.dark_attr
+    strict_gen = getattr(args, "require_generated", False)
 
     if not base:
         rep.fail("no custom properties found in the CSS — is this a token file?")
@@ -960,13 +964,15 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
             _check_generated(data, css, os.path.basename(css_path), args.dir, rep)
         else:
             _check_agreement(data, base, rep)
-            rep.warn("tokens.json was not produced by `brandcheck export`, so it is a second "
-                     "authored format (Iron Law 4). Generate it: "
-                     "python3 scripts/brandcheck.py export BRAND_DIR")
+            (rep.fail if strict_gen else rep.warn)(
+                "tokens.json was not produced by `brandcheck export`, so it is a second "
+                "authored format (Iron Law 4). Generate it: "
+                "python3 scripts/brandcheck.py export BRAND_DIR")
     else:
-        rep.warn(f"no {os.path.basename(json_path)} found — shipping only one token format "
-                 f"means downstream tools cannot consume the system. Generate it: "
-                 f"python3 scripts/brandcheck.py export BRAND_DIR")
+        (rep.fail if strict_gen else rep.warn)(
+            f"no {os.path.basename(json_path)} found — shipping only one token format "
+            f"means downstream tools cannot consume the system. Generate it: "
+            f"python3 scripts/brandcheck.py export BRAND_DIR")
 
     _check_markup(args.dir, css_path, css, tok, rep)
 
@@ -1052,6 +1058,70 @@ def _check_agreement(data: dict, base: Dict[str, str], rep: Report) -> None:
                        f"({coverage:.0%} of the CSS set matched)")
 
 
+def _root_tokens(css: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """(base, dark) custom properties declared on :root in a page's styles.
+
+    Only :root blocks count: a component that sets a variable locally is not a
+    pasted token block.
+    """
+    clean = _strip_comments(css)
+    media, pos = [], 0
+    while True:
+        m = re.search(_AT_BLOCK, clean[pos:])
+        if not m:
+            break
+        start = pos + m.start()
+        _, end = _balanced_block(clean, start)
+        media.append((start, end, bool(_DARK_QUERY.search(clean[start:clean.index("{", start)]))))
+        pos = end
+    base: Dict[str, str] = {}
+    dark: Dict[str, str] = {}
+    for m in re.finditer(r"(?::root\b|\[data-theme)[^{};]*\{", clean):
+        body, _ = _balanced_block(clean, m.start())
+        found = _vars_in(body)
+        inside = next((mm for mm in media if mm[0] < m.start() < mm[1]), None)
+        if re.search(r"data-theme=[\"']?dark", m.group(0)) or (inside and inside[2]):
+            dark.update(found)
+        elif not inside:
+            base.update(found)
+    return base, dark
+
+
+def _check_pasted_tokens(name: str, text: str, tok: TokenCSS, rep: Report) -> None:
+    """A page that pastes the token block must paste what tokens.css says.
+
+    The style tile and the share card carry their own copy of the tokens so
+    they open with no build step. A copy that drifts renders a palette the
+    system does not ship. A base value may match either theme (a dark share
+    card pastes the dark values at :root); a dark-block value must match dark.
+    """
+    styles = "".join(re.findall(r"<style[^>]*>(.*?)</style>", text, flags=re.S | re.I))
+    base, dark = _root_tokens(styles)
+    light_t, dark_t = tok.theme("light"), tok.theme("dark")
+    page_light, page_dark = dict(base), {**base, **dark}
+    drift = []
+    for k in base:
+        if k not in light_t:
+            continue
+        mine = resolve_var(page_light[k], page_light)
+        if not any(same_value(mine, resolve_var(t[k], t)) for t in (light_t, dark_t)):
+            drift.append(f"{k}: page={mine!r} tokens.css={resolve_var(light_t[k], light_t)!r}")
+    for k in dark:
+        if k not in dark_t:
+            continue
+        mine = resolve_var(page_dark[k], page_dark)
+        theirs = resolve_var(dark_t[k], dark_t)
+        if not same_value(mine, theirs):
+            drift.append(f"{k} (dark): page={mine!r} tokens.css={theirs!r}")
+    if drift:
+        rep.fail(f"{name}: its pasted token block has drifted from tokens.css on "
+                 f"{len(drift)} token(s), e.g. " + "; ".join(drift[:3]) +
+                 ". Paste the current tokens.css.")
+    elif set(base) & set(light_t):
+        rep.ok(f"{name}: its pasted tokens agree with tokens.css "
+               f"({len(set(base) & set(light_t))} checked)")
+
+
 def _check_markup(d: str, css_path: str, css: str, tok: TokenCSS, rep: Report) -> None:
     # 3. var() references resolve, across CSS and any HTML in the directory.
     defined = tok.defined()
@@ -1088,6 +1158,7 @@ def _check_markup(d: str, css_path: str, css: str, tok: TokenCSS, rep: Report) -
         else:
             rep.ok(f"{name}: no raw colour outside token declarations")
         _check_self_contained(name, text, rep)
+        _check_pasted_tokens(name, text, tok, rep)
 
 
 # ────────────────────────────────────────────────────────────── fonts ──
@@ -1364,6 +1435,19 @@ def _units(lines: List[str], html: bool) -> List[int]:
 # words and dates do not: "Bank-grade controls, audit pending" is still the
 # claim. Wherever a guideline lists a forbidden phrase, it quotes it.
 CLAIMS_FILE = "forbidden-claims.txt"
+# Quotation clears a forbidden claim only when the line forbids it. Our
+# "bank-grade" controls is still the claim, in quotation marks.
+# Research labels that mark someone else's material. [Assumption] and the
+# like are the brand's own voice, so they do not clear a forbidden claim.
+EVIDENCE_LABEL = re.compile(
+    r"\[(?:VERIFIED|OBSERVED|INTERPRETATION|VISUAL OBSERVATION)[^\]]*\]", re.I)
+# A denial directly before the phrase: "is not yet regulator-approved" is the
+# stage honesty the skill asks for, not the claim.
+DENIAL = re.compile(r"\b(?:not(?:\s+yet)?|never(?:\s+been)?|no\s+longer|isn'?t|aren'?t|"
+                    r"wasn'?t|weren'?t)\s+(?:[\w-]+\s+){0,2}$", re.I)
+PROHIBITION = re.compile(
+    r"\b(?:never|don'?t|do not|must not|may not|avoid|ban|banned|forbid|forbidden|"
+    r"prohibit|prohibited|not permitted|no longer|stop saying|instead of|rather than)\b", re.I)
 _SEP = r"[\s\-‐-―]*"
 
 
@@ -1410,11 +1494,14 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
             for m in list(rx.finditer(line))[:1]:
                 quoted = any(q.start() <= m.start() and m.end() <= q.end()
                              for q in QUOTED.finditer(line))
-                if quoted or RESEARCH_LABEL.search(line):
+                why = ("quoted prohibition" if quoted and PROHIBITION.search(line) else
+                       "labelled research" if EVIDENCE_LABEL.search(line) else
+                       "denied, not claimed" if DENIAL.search(line[:m.start()]) else None)
+                if why:
                     suppressed += 1
                     if show_all:
                         rep.note(f"{os.path.basename(path)}:{i} forbidden claim '{shown}' "
-                                 f"suppressed ({'quoted' if quoted else 'labelled research'})")
+                                 f"suppressed ({why})")
                     continue
                 forbidden += 1
                 rep.fail(f"{os.path.basename(path)}:{i} forbidden claim '{shown}' — "
@@ -1439,7 +1526,7 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
 
 
 SCANNED = (".md", ".mdx", ".html", ".htm", ".txt", ".astro", ".tsx", ".jsx", ".vue",
-           ".svelte")
+           ".svelte", ".ts", ".js", ".mjs", ".cjs", ".json", ".yml", ".yaml")
 SKIPPED_DIRS = {".git", "node_modules", "__pycache__", "dist", "build", ".next", ".astro",
                 ".vercel", ".svelte-kit", "coverage"}
 
@@ -1543,7 +1630,9 @@ _RENDER_JS = r"""
   const item = (el, kind, fgCss, text, groundEl) => {
     const cs = getComputedStyle(el), g = ground(groundEl || el), ex = el.closest('[data-contrast-exempt]');
     const fg = parse(fgCss); fg[3] *= opacity(el);
-    return {kind, where: describe(el), text: (text || '').trim().replace(/\s+/g, ' ').slice(0, 40),
+    const lk = el.closest('[data-theme]');
+    const lock = (lk && lk !== document.documentElement) ? lk.getAttribute('data-theme') : null;
+    return {kind, where: describe(el), lock, text: (text || '').trim().replace(/\s+/g, ' ').slice(0, 40),
             fg, bg: g.bg, image: g.image, size: parseFloat(cs.fontSize),
             weight: parseInt(cs.fontWeight, 10) || 400,
             exempt: ex ? (ex.getAttribute('data-contrast-exempt') || '') : null,
@@ -1577,7 +1666,9 @@ _RENDER_JS = r"""
       if (!el || el === document.body || el === document.documentElement) return null;
       const cs = getComputedStyle(el);
       const outline = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0;
+      const lk = el.closest('[data-theme]');
       return {where: describe(el), text: (el.innerText || el.value || '').trim().slice(0, 30),
+              lock: (lk && lk !== document.documentElement) ? lk.getAttribute('data-theme') : null,
               outline: outline ? parse(cs.outlineColor) : null, shadow: cs.boxShadow !== 'none',
               bg: ground(el.parentElement || el).bg, key: describe(el) + '|' + (el.innerText || el.value || '').slice(0, 30)};
     },
@@ -1621,7 +1712,11 @@ def playwright_ready() -> Optional[str]:
 def cmd_render(args: argparse.Namespace, rep: Report) -> None:
     html = args.html
     rep.section(f"RENDER · {html}")
-    if not os.path.exists(html):
+    is_url = html.startswith(("http://", "https://"))
+    if is_url and not args.pairs:
+        rep.fail("rendering a URL needs --pairs PATH (the brand's pairs.tsv)")
+        return
+    if not is_url and not os.path.exists(html):
         rep.fail(f"not found: {html}")
         return
     why = playwright_ready()
@@ -1640,29 +1735,46 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
     else:
         rep.warn(f"no pairs file at {pairs_path}: every rendered pairing will read as undeclared")
     widths = [int(w) for w in str(args.widths).split(",") if w.strip()]
-    url = pathlib.Path(html).resolve().as_uri()
+    if is_url:
+        from urllib.parse import urlsplit
+        parts = urlsplit(html)
+        url, same_origin = html, f"{parts.scheme}://{parts.netloc}/"
+    else:
+        url, same_origin = pathlib.Path(html).resolve().as_uri(), None
+    # --as-is: a page with one theme of its own (a share card) is rendered once,
+    # untouched, and may match a declared pairing from either theme.
+    themes = ("as-is",) if getattr(args, "as_is", False) else THEMES
+    union = declared["light"] + declared["dark"]
+
+    def declared_for(theme):
+        return union if theme == "as-is" else declared[theme]
 
     undeclared: Dict[tuple, list] = {}
     low: Dict[tuple, list] = {}
-    exempt, images, counts = set(), set(), {t: 0 for t in THEMES}
+    exempt, images, counts = set(), set(), {t: 0 for t in themes}
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
 
         def open_page(theme, width, reduce="no-preference", still=True):
             ctx = browser.new_context(viewport={"width": width, "height": 900},
-                                      color_scheme=theme, reduced_motion=reduce)
-            # Offline, as a reviewer on a locked-down network sees it.
+                                      color_scheme="light" if theme == "as-is" else theme,
+                                      reduced_motion=reduce)
+            # Offline, as a reviewer on a locked-down network sees it. A served
+            # page may also load from its own origin, and nothing else.
+            allowed = ("file:", "data:") + ((same_origin,) if same_origin else ())
             ctx.route("**/*", lambda r: r.continue_()
-                      if r.request.url.startswith(("file:", "data:")) else r.abort())
+                      if r.request.url.startswith(allowed) else r.abort())
             page = ctx.new_page()
             page.goto(url)
             if still:
                 page.add_style_tag(content=_STILL)
-            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme)
+            if theme != "as-is":
+                page.evaluate("t => document.documentElement.setAttribute('data-theme', t)",
+                              theme)
             page.evaluate(_RENDER_JS)
             return ctx, page
 
-        for theme in THEMES:
+        for theme in themes:
             for width in widths:
                 ctx, page = open_page(theme, width)
                 spill = page.evaluate("() => window.__bc.overflow()")
@@ -1680,16 +1792,20 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
                     f = composite(tuple(it["fg"]), tuple(it["bg"]))
                     b = tuple(it["bg"])
                     counts[theme] += 1
+                    # A theme-locked panel (the tile shows both themes at once) is
+                    # judged against its own theme's pairings.
+                    eff = it["lock"] if it.get("lock") in THEMES else theme
+                    label = theme if eff == theme else f"{theme}, {eff} panel"
                     r = contrast_of(f, b)
                     if it["kind"] == "ui":
                         thr = 3.0
                     else:
                         large = it["size"] >= 24 or (it["size"] >= 18.66 and it["weight"] >= 700)
                         thr = 3.0 if large else 4.5
-                    key = (theme, to_hex(f), to_hex(b))
+                    key = (label, to_hex(f), to_hex(b))
                     if r < thr:
                         low.setdefault(key + (thr,), []).append(it)
-                    if not any(_near(f, df) and _near(b, db) for df, db in declared[theme]):
+                    if not any(_near(f, df) and _near(b, db) for df, db in declared_for(eff)):
                         undeclared.setdefault(key, []).append(it)
                 ctx.close()
 
@@ -1712,12 +1828,15 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
                     if r < 3.0:
                         rep.fail(f"{theme}: focus ring on {fx['where']} is {fmt_ratio(r)}:1 "
                                  f"against its ground, needs 3.0:1")
-                    if not any(_near(ring, df) and _near(g, db) for df, db in declared[theme]):
+                    eff = fx["lock"] if fx.get("lock") in THEMES else theme
+                    if not any(_near(ring, df) and _near(g, db)
+                               for df, db in declared_for(eff)):
                         undeclared.setdefault((theme, to_hex(ring), to_hex(g)), []).append(
                             {"where": fx["where"], "text": "(focus ring)", "kind": "ui"})
             ctx.close()
 
-        ctx, page = open_page("light", max(widths), reduce="reduce", still=False)
+        ctx, page = open_page(themes[0] if themes[0] == "as-is" else "light", max(widths),
+                              reduce="reduce", still=False)
         moving = page.evaluate("() => window.__bc.motion()")
         if moving:
             rep.fail(f"animation survives reduced motion on {len(moving)} element(s): "
@@ -1749,8 +1868,8 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
                  f"cannot be computed from colours. Check it by eye and document how.")
     for where, reason in sorted(exempt):
         rep.note(f"exempt from contrast: {where} ({reason})")
-    for theme in THEMES:
-        if not any(k[0] == theme for k in list(low) + list(undeclared)):
+    for theme in themes:
+        if not any(k[0].split(",")[0] == theme for k in list(low) + list(undeclared)):
             rep.ok(f"{theme}: {counts[theme]} rendered pairing(s) at {widths}px, "
                    f"all declared and meeting their threshold")
 
@@ -1782,6 +1901,7 @@ class PNGImage:
         self.depth, self.interlace = depth, interlace
         self.data: Optional[bytearray] = None
         self.ch = {0: 1, 2: 3, 4: 2, 6: 4}.get(ctype, 0)
+        self.text: Dict[str, str] = {}
 
     def px(self, x: int, y: int) -> Tuple[int, int, int, int]:
         i = (y * self.width + x) * self.ch
@@ -1812,6 +1932,9 @@ def read_png(path: str, decode: bool = True) -> PNGImage:
             img = PNGImage(w, h, ctype, depth, interlace)
         elif tag == b"IDAT":
             idat.append(data)
+        elif tag == b"tEXt" and img is not None and b"\x00" in data:
+            key, _, value = data.partition(b"\x00")
+            img.text[key.decode("latin-1")] = value.decode("latin-1")
         elif tag == b"IEND":
             break
     if img is None:
@@ -1907,6 +2030,49 @@ def _check_logo_svg(path: str, rep: Report) -> None:
                      "that reproduce it travel with it.")
 
 
+def _check_freshness(d: str, brand_dir: str, rep: Report) -> None:
+    """A rendered PNG must still match what it was rendered from.
+
+    brandassets records the source file (and any colour tokens) in a tEXt
+    chunk. If the source changed, or a token now resolves differently, the
+    PNG is stale. A PNG without the record cannot be proven current.
+    """
+    import hashlib
+    tokens_path = os.path.join(brand_dir, "tokens.css")
+    tok = parse_token_css(open(tokens_path, encoding="utf-8").read()) \
+        if os.path.exists(tokens_path) else None
+    unproven = []
+    for name in sorted(os.listdir(d)):
+        if not name.endswith(".png"):
+            continue
+        try:
+            record = json.loads(read_png(os.path.join(d, name), decode=False).text["brandassets"])
+        except (KeyError, ValueError, OSError):
+            unproven.append(name)
+            continue
+        src = os.path.normpath(os.path.join(d, record.get("source", "")))
+        if not os.path.exists(src):
+            rep.warn(f"{name}: its source {record.get('source')} is gone; cannot prove it current")
+            continue
+        digest = hashlib.sha256(open(src, "rb").read()).hexdigest()
+        if digest != record.get("sha256"):
+            rep.fail(f"{name} is stale: {os.path.basename(src)} changed after it was rendered. "
+                     f"Re-run brandassets.")
+            continue
+        for token, theme, value in (record.get("tokens") or []):
+            if tok is None:
+                break
+            table = tok.theme(theme)
+            now = resolve_var(f"var({token})", table)
+            if "var(" in now or not same_value(now, value):
+                rep.fail(f"{name} is stale: {token} ({theme}) is now {now}, but it was rendered "
+                         f"with {value}. Re-run brandassets.")
+                break
+    if unproven:
+        rep.warn(f"{len(unproven)} PNG(s) carry no brandassets record, so nothing proves they "
+                 f"match their source: {unproven[:4]}")
+
+
 def cmd_assets(args: argparse.Namespace, rep: Report) -> None:
     import struct
     d = args.assets or os.path.join(args.dir, "assets")
@@ -1990,6 +2156,8 @@ def cmd_assets(args: argparse.Namespace, rep: Report) -> None:
         else:
             rep.ok(f"{name}: 1200x630")
 
+    _check_freshness(d, args.dir, rep)
+
     path = need("manifest.webmanifest")
     if path:
         try:
@@ -2032,7 +2200,7 @@ def cmd_assets(args: argparse.Namespace, rep: Report) -> None:
 
 def cmd_all(args: argparse.Namespace, rep: Report) -> None:
     d = args.dir
-    cmd_tokens(argparse.Namespace(dir=d, css=None, json=None), rep)
+    cmd_tokens(argparse.Namespace(dir=d, css=None, json=None, require_generated=True), rep)
     pairs = getattr(args, "pairs", None) or os.path.join(d, "pairs.tsv")
     if os.path.exists(pairs):
         css = os.path.join(d, "tokens.css")
@@ -2044,6 +2212,10 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
                  f"system ships must be declared and computed — an undeclared pairing is an "
                  f"unverified pairing. If it lives outside the brand directory, pass "
                  f"--pairs PATH.")
+    if not args.claims and not os.path.exists(os.path.join(d, CLAIMS_FILE)):
+        rep.section("CLAIMS")
+        rep.fail(f"no {CLAIMS_FILE}: the claims stage 1 ruled out are not written down, so "
+                 f"nothing enforces them. Start from templates/{CLAIMS_FILE}.")
     cmd_lexicon(argparse.Namespace(dir=d, strict=args.strict, claims=args.claims,
                                    show_suppressed=args.show_suppressed), rep)
 
@@ -2063,17 +2235,30 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
     cmd_assets(argparse.Namespace(dir=d, assets=args.assets), rep)
 
     tile = os.path.join(d, "style-tile.html")
-    if os.path.exists(tile):
+    css = os.path.join(d, "tokens.css")
+    common = dict(pairs=pairs if os.path.exists(pairs) else None,
+                  tokens=css if os.path.exists(css) else None)
+    if not os.path.exists(tile):
+        rep.section("RENDER")
+        rep.fail("missing style-tile.html, the working artifact the system is verified against")
+    elif args.no_render:
+        rep.section("RENDER")
+        rep.warn("the rendered layer was skipped by request (--no-render): no check in this "
+                 "run proves every painted pairing is declared (Iron Law 1).")
+    else:
         why = playwright_ready()
         if why:
             rep.section("RENDER")
-            rep.warn(f"the rendered layer did not run: {why}. Until it runs, no check "
-                     f"proves every painted pairing is declared (Iron Law 1).")
+            rep.fail(f"the rendered layer did not run: {why}. Without it, no check proves every "
+                     f"painted pairing is declared (Iron Law 1). Install Chromium, or pass "
+                     f"--no-render to skip it knowingly.")
         else:
-            css = os.path.join(d, "tokens.css")
-            cmd_render(argparse.Namespace(html=tile, pairs=pairs if os.path.exists(pairs) else None,
-                                          tokens=css if os.path.exists(css) else None,
-                                          widths=args.widths), rep)
+            cmd_render(argparse.Namespace(html=tile, widths=args.widths, as_is=False, **common),
+                       rep)
+            card = os.path.join(d, "og-card.html")
+            if os.path.exists(card):
+                cmd_render(argparse.Namespace(html=card, widths="1200", as_is=True, **common),
+                           rep)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -2120,11 +2305,15 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     r = sub.add_parser("render", help="render the style tile in a browser: every painted "
                                       "pairing declared and passing, overflow, focus, motion")
-    r.add_argument("html", help="the style tile (or any self-contained page)")
+    r.add_argument("html", help="the style tile, any self-contained page, or a served URL "
+                                "(http://localhost:3000/) with --pairs")
     r.add_argument("--pairs", help="pairings file (default: pairs.tsv beside the page)")
     r.add_argument("--tokens", help="tokens.css (default: beside the pairs file)")
     r.add_argument("--widths", default="320,1440",
                    help="viewport widths in CSS px (default 320,1440; 320 is WCAG reflow)")
+    r.add_argument("--as-is", action="store_true",
+                   help="render once without switching themes, matching pairings declared "
+                        "for either theme (for a single-theme page such as the share card)")
     r.set_defaults(fn=cmd_render)
 
     s_ = sub.add_parser("assets", help="logo SVGs, icon set, avatar, share cards, manifest")
@@ -2132,7 +2321,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     s_.add_argument("--assets", help="asset directory, if not DIR/assets")
     s_.set_defaults(fn=cmd_assets)
 
-    a = sub.add_parser("all", help="tokens + contrast + lexicon over a brand directory")
+    a = sub.add_parser("all", help="every check that applies to a brand directory",
+                       description="Runs tokens, contrast, lexicon, fonts, assets and render over "
+                                   "a brand directory: every token, pairing, document, font, "
+                                   "asset and rendered page the system ships. Requires "
+                                   "forbidden-claims.txt and style-tile.html.")
     a.add_argument("dir")
     a.add_argument("--strict", action="store_true")
     a.add_argument("--show-suppressed", action="store_true")
@@ -2142,6 +2335,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                                     f"under BRAND_DIR/fonts (default {DEFAULT_GLYPHS})")
     a.add_argument("--widths", default="320,1440", help="render widths (default 320,1440)")
     a.add_argument("--assets", help="asset directory, if not BRAND_DIR/assets")
+    a.add_argument("--no-render", action="store_true",
+                   help="skip the rendered layer knowingly; the run then proves less")
     a.set_defaults(fn=cmd_all)
 
     p.add_argument("--version", action="version",
