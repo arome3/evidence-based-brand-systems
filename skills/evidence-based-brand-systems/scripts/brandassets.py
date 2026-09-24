@@ -187,8 +187,8 @@ def cmd_wordmark(args, rep: bc.Report) -> None:
     except ImportError as exc:
         rep.fail(f"{exc}. Install: pip install fonttools uharfbuzz")
         return
-    except (OSError, ValueError, KeyError) as exc:
-        rep.fail(str(exc))
+    except Exception as exc:                     # noqa: BLE001 - report, never crash
+        rep.fail(f"cannot build the wordmark from {args.font}: {exc}")
         return
     out = pathlib.Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)

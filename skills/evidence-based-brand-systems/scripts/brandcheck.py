@@ -592,8 +592,15 @@ def _render_value(raw):
             a = raw.get("alpha", 1)
             return str(raw["hex"]) + (f"{int(round(float(a) * 255)):02x}" if a < 1 else "")
         if "colorSpace" in raw and "components" in raw:
-            comps = " ".join(str(c) for c in raw["components"])
+            # hex is an optional fallback; render the components as CSS so the
+            # value compares as a colour, not as a string.
+            c, space = raw["components"], str(raw["colorSpace"]).lower()
             alpha = f" / {raw['alpha']}" if "alpha" in raw else ""
+            if space == "srgb" and len(c) == 3:
+                return "rgb(" + " ".join(f"{float(x) * 255:g}" for x in c) + alpha + ")"
+            if space == "hsl" and len(c) == 3:
+                return f"hsl({c[0]} {c[1]}% {c[2]}%{alpha})"
+            comps = " ".join(str(x) for x in c)
             return f"{raw['colorSpace']}({comps}{alpha})"
         if "value" in raw and "unit" in raw:
             return f"{raw['value']}{raw['unit']}"
@@ -1361,8 +1368,11 @@ PROOF_PATTERNS = [
      r"(?:\s+\w+){0,4}?\s+(?:by|of|to|at)\s+(?:up to\s+)?\d+(?:\.\d+)?\s?%|"
      r"\b\d+(?:\.\d+)?x\s+(?:faster|more|fewer|less|cheaper|better)\b",
      "performance-metric claim"),
-    (r"\b(?:approved|certified|accredited|endorsed|licensed|audited|backed)\s+by\b|"
-     r"\b[\w]+-(?:approved|certified|accredited|endorsed)\b", "third-party endorsement claim"),
+    (r"\b(?:approved|certified|accredited|endorsed|licensed|audited)\s+by\b|"
+     r"\b[\w]+-(?:approved|certified|accredited|endorsed)\b|"
+     # "backed by evidence" is not an endorsement; "backed by Y Combinator" is.
+     r"\b(?:backed|funded)\s+by\s+(?:(?-i:[A-Z])|leading\b|top\b|tier|investors\b|VCs?\b)",
+     "third-party endorsement claim"),
     (r"\b(?:magic quadrant|forrester wave|gartner peer insights)\b", "analyst-recognition claim"),
     (r"\b\d\.\d\s*/\s*5\b", "rating claim"),
     (r"\b(?:award[- ]winning|industry[- ]leading|#1\b)", "superlative proof claim"),
@@ -1406,6 +1416,17 @@ RESEARCH_LABEL = re.compile(
 QUOTED = re.compile(r"[\"\u201c\u2018\u00ab][^\"\u201d\u2019\u00bb]{0,400}?[\"\u201d\u2019\u00bb]|`[^`]{0,200}`")
 
 
+_CLAUSE_SEP = re.compile(r"[.;!?](?:\s|$)|,\s+(?:yet|but|while|whereas|although|though)\b|"
+                         r"\s[\u2014\u2013]\s|\s-\s")
+
+
+def _around(text: str, span: Tuple[int, int], sep: "re.Pattern[str]") -> str:
+    """The clause or sentence of `text` that contains `span`."""
+    start = max([m.end() for m in sep.finditer(text, 0, span[0])] or [0])
+    nxt = sep.search(text, span[1])
+    return text[start:nxt.start() if nxt else len(text)]
+
+
 def _suppressed(line: str, span: Tuple[int, int],
                 context: str = "") -> Optional[str]:
     """Return why this hit is not a violation, or None if it is one.
@@ -1423,9 +1444,11 @@ def _suppressed(line: str, span: Tuple[int, int],
         return "carries a date or attribution"
     if INTERROGATIVE.search(line):
         return "an open question, not a claim"
-    if NEGATION.search(line):
+    # A negation governs its own clause, and a label its own sentence: "we
+    # banned seamless, yet our seamless checkout" still uses the word.
+    if NEGATION.search(_around(line, span, _CLAUSE_SEP)):
         return "prohibition, restriction or condition"
-    if RESEARCH_LABEL.search(line):
+    if RESEARCH_LABEL.search(_around(line, span, _SENTENCE_END)):
         return "labelled research observation"
     for q in QUOTED.finditer(line):
         if q.start() <= span[0] and span[1] <= q.end():
@@ -1513,7 +1536,8 @@ def claim_hits(text: str, claims) -> List[Tuple[str, str, Optional[str]]]:
     """
     out = []
     for rx, shown, reason in claims:
-        for m in list(rx.finditer(text))[:1]:
+        verdicts = []
+        for m in rx.finditer(text):
             start, end = m.span()
             s0 = max([e.end() for e in _SENTENCE_END.finditer(text, 0, start)] or [0])
             nxt = _SENTENCE_END.search(text, end)
@@ -1522,7 +1546,10 @@ def claim_hits(text: str, claims) -> List[Tuple[str, str, Optional[str]]]:
             why = ("quoted prohibition" if quoted and PROHIBITION.search(text[s0:start]) else
                    "labelled research" if quoted and EVIDENCE_LABEL.search(text[s0:s1]) else
                    "denied, not claimed" if DENIAL.search(text[s0:start]) else None)
-            out.append((shown, reason, why))
+            verdicts.append(why)
+        if verdicts:
+            # One uncleared occurrence is a hit, however many others are cleared.
+            out.append((shown, reason, None if None in verdicts else verdicts[0]))
     return out
 PROHIBITION = re.compile(
     r"\b(?:never|don'?t|do not|must not|may not|avoid|ban|banned|forbid|forbidden|"
@@ -1570,13 +1597,18 @@ def _scan_text(path: str, text: str, rep: Report, strict: bool,
         window = unit + "".join(notes.get(ref, "") + "\n"
                                 for ref in _FOOTNOTE_REF.findall(unit))
         for rx, label, is_word in checks:
-            for m in list(rx.finditer(line))[:1]:      # one report per line and label
+            # Every occurrence is examined; the first uncleared one is reported,
+            # once per line and label.
+            hit = None
+            for m in rx.finditer(line):
                 why = _suppressed(line, m.span(), window)
-                if why:
-                    suppressed += 1
-                    if show_all:
-                        rep.note(f"{os.path.basename(path)}:{i} {label} suppressed ({why})")
-                    continue
+                if not why:
+                    hit = m
+                    break
+                suppressed += 1
+                if show_all:
+                    rep.note(f"{os.path.basename(path)}:{i} {label} suppressed ({why})")
+            for m in ([hit] if hit else []):
                 msg = f"{os.path.basename(path)}:{i} {label} — {line.strip()[:88]}"
                 if is_word:
                     words += 1
@@ -1736,7 +1768,9 @@ _RENDER_JS = r"""
       document.querySelectorAll(fields).forEach(el => {
         if (!visible(el)) return;
         const cs = getComputedStyle(el);
-        if (el.value) out.push(item(el, 'text', cs.color, el.value));
+        const val = el.tagName === 'SELECT'
+          ? (el.selectedOptions[0] ? el.selectedOptions[0].text : '') : el.value;
+        if (val) out.push(item(el, 'text', cs.color, val));
         else if (el.placeholder) out.push(item(el, 'text', getComputedStyle(el, '::placeholder').color, el.placeholder));
         if (cs.borderTopStyle !== 'none' && parseFloat(cs.borderTopWidth) > 0)
           out.push(item(el, 'ui', cs.borderTopColor, '(control border)', el.parentElement));
@@ -1846,113 +1880,115 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
     exempt, images, counts = set(), set(), {t: 0 for t in themes}
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
+        try:
 
-        def open_page(theme, width, reduce="no-preference", still=True):
-            ctx = browser.new_context(viewport={"width": width, "height": 900},
-                                      color_scheme="light" if theme == "as-is" else theme,
-                                      reduced_motion=reduce)
-            # Offline, as a reviewer on a locked-down network sees it. A served
-            # page may also load from its own origin, and nothing else.
-            allowed = ("file:", "data:") + ((same_origin,) if same_origin else ())
-            ctx.route("**/*", lambda r: r.continue_()
-                      if r.request.url.startswith(allowed) else r.abort())
-            page = ctx.new_page()
-            page.goto(url)
-            if still:
-                page.add_style_tag(content=_STILL)
-            if theme != "as-is":
-                page.evaluate("t => document.documentElement.setAttribute('data-theme', t)",
-                              theme)
-            page.evaluate(_RENDER_JS)
-            return ctx, page
+            def open_page(theme, width, reduce="no-preference", still=True):
+                ctx = browser.new_context(viewport={"width": width, "height": 900},
+                                          color_scheme="light" if theme == "as-is" else theme,
+                                          reduced_motion=reduce)
+                # Offline, as a reviewer on a locked-down network sees it. A served
+                # page may also load from its own origin, and nothing else.
+                allowed = ("file:", "data:") + ((same_origin,) if same_origin else ())
+                ctx.route("**/*", lambda r: r.continue_()
+                          if r.request.url.startswith(allowed) else r.abort())
+                page = ctx.new_page()
+                page.goto(url)
+                if still:
+                    page.add_style_tag(content=_STILL)
+                if theme != "as-is":
+                    page.evaluate("t => document.documentElement.setAttribute('data-theme', t)",
+                                  theme)
+                page.evaluate(_RENDER_JS)
+                return ctx, page
 
-        if claims:
-            # Copy set at runtime (a CMS, a script) is in no source file, so the
-            # rendered text is held to the forbidden claims as well.
-            ctx, page = open_page(themes[0], max(widths))
-            hits = 0
-            for block in page.evaluate("() => document.body.innerText").split("\n"):
-                flat = " ".join(block.split())
-                for shown, reason, why in claim_hits(flat, claims) if flat else ():
-                    if not why:
-                        hits += 1
-                        rep.fail(f"rendered page: forbidden claim '{shown}' — {flat[:88]}"
-                                 + (f"  [{reason}]" if reason else ""))
-            if not hits:
-                rep.ok(f"rendered copy: none of the {len(claims)} forbidden claim(s) appear")
-            ctx.close()
-
-        for theme in themes:
-            for width in widths:
-                ctx, page = open_page(theme, width)
-                spill = page.evaluate("() => window.__bc.overflow()")
-                if spill > 0:
-                    rep.fail(f"{theme} {width}px: horizontal overflow, the page is {spill}px "
-                             f"wider than the viewport")
-                for it in page.evaluate("() => window.__bc.pairs()"):
-                    if it["disabled"]:
-                        continue
-                    if it["exempt"] is not None:
-                        exempt.add((it["where"], it["exempt"] or "(no reason given)"))
-                        continue
-                    if it["image"]:
-                        images.add((theme, it["where"], it["image"]))
-                    f = composite(tuple(it["fg"]), tuple(it["bg"]))
-                    b = tuple(it["bg"])
-                    counts[theme] += 1
-                    # A theme-locked panel (the tile shows both themes at once) is
-                    # judged against its own theme's pairings.
-                    eff = it["lock"] if it.get("lock") in THEMES else theme
-                    label = theme if eff == theme else f"{theme}, {eff} panel"
-                    r = contrast_of(f, b)
-                    if it["kind"] == "ui":
-                        thr = 3.0
-                    else:
-                        large = it["size"] >= 24 or (it["size"] >= 18.66 and it["weight"] >= 700)
-                        thr = 3.0 if large else 4.5
-                    key = (label, to_hex(f), to_hex(b))
-                    if r < thr:
-                        low.setdefault(key + (thr,), []).append(it)
-                    if not any(_near(f, df) and _near(b, db) for df, db in declared_for(eff)):
-                        undeclared.setdefault(key, []).append(it)
+            if claims:
+                # Copy set at runtime (a CMS, a script) is in no source file, so the
+                # rendered text is held to the forbidden claims as well.
+                ctx, page = open_page(themes[0], max(widths))
+                hits = 0
+                for block in page.evaluate("() => document.body.innerText").split("\n"):
+                    flat = " ".join(block.split())
+                    for shown, reason, why in claim_hits(flat, claims) if flat else ():
+                        if not why:
+                            hits += 1
+                            rep.fail(f"rendered page: forbidden claim '{shown}' — {flat[:88]}"
+                                     + (f"  [{reason}]" if reason else ""))
+                if not hits:
+                    rep.ok(f"rendered copy: none of the {len(claims)} forbidden claim(s) appear")
                 ctx.close()
 
-            # Focus: walk the tab order once per theme at the widest width.
-            ctx, page = open_page(theme, max(widths))
-            first = None
-            for _ in range(60):
-                page.keyboard.press("Tab")
-                fx = page.evaluate("() => window.__bc.focused()")
-                if not fx or fx["key"] == first:
-                    break
-                first = first or fx["key"]
-                if not fx["outline"] and not fx["shadow"]:
-                    rep.fail(f"{theme}: no visible focus indicator on {fx['where']} "
-                             f"\"{fx['text']}\" (outline none, no box-shadow)")
-                    continue
-                if fx["outline"]:
-                    ring, g = composite(tuple(fx["outline"]), tuple(fx["bg"])), tuple(fx["bg"])
-                    r = contrast_of(ring, g)
-                    if r < 3.0:
-                        rep.fail(f"{theme}: focus ring on {fx['where']} is {fmt_ratio(r)}:1 "
-                                 f"against its ground, needs 3.0:1")
-                    eff = fx["lock"] if fx.get("lock") in THEMES else theme
-                    if not any(_near(ring, df) and _near(g, db)
-                               for df, db in declared_for(eff)):
-                        undeclared.setdefault((theme, to_hex(ring), to_hex(g)), []).append(
-                            {"where": fx["where"], "text": "(focus ring)", "kind": "ui"})
-            ctx.close()
+            for theme in themes:
+                for width in widths:
+                    ctx, page = open_page(theme, width)
+                    spill = page.evaluate("() => window.__bc.overflow()")
+                    if spill > 0:
+                        rep.fail(f"{theme} {width}px: horizontal overflow, the page is {spill}px "
+                                 f"wider than the viewport")
+                    for it in page.evaluate("() => window.__bc.pairs()"):
+                        if it["disabled"]:
+                            continue
+                        if it["exempt"] is not None:
+                            exempt.add((it["where"], it["exempt"] or "(no reason given)"))
+                            continue
+                        if it["image"]:
+                            images.add((theme, it["where"], it["image"]))
+                        f = composite(tuple(it["fg"]), tuple(it["bg"]))
+                        b = tuple(it["bg"])
+                        counts[theme] += 1
+                        # A theme-locked panel (the tile shows both themes at once) is
+                        # judged against its own theme's pairings.
+                        eff = it["lock"] if it.get("lock") in THEMES else theme
+                        label = theme if eff == theme else f"{theme}, {eff} panel"
+                        r = contrast_of(f, b)
+                        if it["kind"] == "ui":
+                            thr = 3.0
+                        else:
+                            large = it["size"] >= 24 or (it["size"] >= 18.66 and it["weight"] >= 700)
+                            thr = 3.0 if large else 4.5
+                        key = (label, to_hex(f), to_hex(b))
+                        if r < thr:
+                            low.setdefault(key + (thr,), []).append(it)
+                        if not any(_near(f, df) and _near(b, db) for df, db in declared_for(eff)):
+                            undeclared.setdefault(key, []).append(it)
+                    ctx.close()
 
-        ctx, page = open_page(themes[0] if themes[0] == "as-is" else "light", max(widths),
-                              reduce="reduce", still=False)
-        moving = page.evaluate("() => window.__bc.motion()")
-        if moving:
-            rep.fail(f"animation survives reduced motion on {len(moving)} element(s): "
-                     f"{sorted(set(moving))[:4]}. The reduced state must be the finished state.")
-        else:
-            rep.ok("reduced motion: no animation survives prefers-reduced-motion: reduce")
-        ctx.close()
-        browser.close()
+                # Focus: walk the tab order once per theme at the widest width.
+                ctx, page = open_page(theme, max(widths))
+                first = None
+                for _ in range(60):
+                    page.keyboard.press("Tab")
+                    fx = page.evaluate("() => window.__bc.focused()")
+                    if not fx or fx["key"] == first:
+                        break
+                    first = first or fx["key"]
+                    if not fx["outline"] and not fx["shadow"]:
+                        rep.fail(f"{theme}: no visible focus indicator on {fx['where']} "
+                                 f"\"{fx['text']}\" (outline none, no box-shadow)")
+                        continue
+                    if fx["outline"]:
+                        ring, g = composite(tuple(fx["outline"]), tuple(fx["bg"])), tuple(fx["bg"])
+                        r = contrast_of(ring, g)
+                        if r < 3.0:
+                            rep.fail(f"{theme}: focus ring on {fx['where']} is {fmt_ratio(r)}:1 "
+                                     f"against its ground, needs 3.0:1")
+                        eff = fx["lock"] if fx.get("lock") in THEMES else theme
+                        if not any(_near(ring, df) and _near(g, db)
+                                   for df, db in declared_for(eff)):
+                            undeclared.setdefault((theme, to_hex(ring), to_hex(g)), []).append(
+                                {"where": fx["where"], "text": "(focus ring)", "kind": "ui"})
+                ctx.close()
+
+            ctx, page = open_page(themes[0] if themes[0] == "as-is" else "light", max(widths),
+                                  reduce="reduce", still=False)
+            moving = page.evaluate("() => window.__bc.motion()")
+            if moving:
+                rep.fail(f"animation survives reduced motion on {len(moving)} element(s): "
+                         f"{sorted(set(moving))[:4]}. The reduced state must be the finished state.")
+            else:
+                rep.ok("reduced motion: no animation survives prefers-reduced-motion: reduce")
+            ctx.close()
+        finally:
+            browser.close()   # even when a page throws
 
     def unique(items):
         return list({(i["where"], i["text"]): i for i in items}.values())
@@ -2024,7 +2060,20 @@ class PNGImage:
 
 
 def read_png(path: str, decode: bool = True) -> PNGImage:
-    """Size always; pixels for 8-bit, non-interlaced grey/RGB/RGBA (stdlib only)."""
+    """Size always; pixels for 8-bit, non-interlaced grey/RGB/RGBA (stdlib only).
+
+    Any malformed file raises ValueError, so callers report it as a FAIL
+    instead of crashing mid-report.
+    """
+    import struct
+    import zlib
+    try:
+        return _read_png(path, decode)
+    except (struct.error, zlib.error, IndexError, EOFError) as exc:
+        raise ValueError(f"corrupt or truncated PNG ({exc.__class__.__name__}: {exc})") from None
+
+
+def _read_png(path: str, decode: bool) -> PNGImage:
     import struct
     import zlib
     blob = open(path, "rb").read()
@@ -2258,7 +2307,11 @@ def cmd_assets(args: argparse.Namespace, rep: Report) -> None:
     if "og-default.png" not in ogs:
         rep.fail("missing og-default.png, the share card used when a page has none of its own")
     for name in ogs:
-        img = read_png(os.path.join(d, name), decode=False)
+        try:
+            img = read_png(os.path.join(d, name), decode=False)
+        except (ValueError, OSError) as exc:
+            rep.fail(f"{name}: {exc}")
+            continue
         if (img.width, img.height) != OG_SIZE:
             rep.fail(f"{name} is {img.width}x{img.height}; share cards are 1200x630")
         else:
@@ -2471,7 +2524,10 @@ def main(argv: Optional[List[str]] = None) -> int:
                    version=f"brandcheck {__version__}")
     args = p.parse_args(argv)
     rep = Report()
-    args.fn(args, rep)
+    try:
+        args.fn(args, rep)
+    except ValueError as exc:            # unparseable input: report, never crash
+        rep.fail(f"cannot check this input: {exc}")
     return rep.verdict()
 
 

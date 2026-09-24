@@ -67,3 +67,17 @@ def test_quoted_and_prohibited_mentions_stay_suppressed(run, write, tmp_path):
                    "We avoid seamless as a word.\n")
     code, out = lex(run, tmp_path, "--strict")
     assert code == 0
+
+
+def test_backed_by_evidence_is_not_an_endorsement(run, write, tmp_path):
+    write("02.md", "Two qualities, each backed by per-site evidence.\n\n"
+                   "A claim backed by data and sources.\n")
+    code, out = lex(run, tmp_path, "--strict")
+    assert code == 0, out
+
+
+def test_backed_by_a_named_backer_is_an_endorsement(run, write, tmp_path):
+    write("01.md", "Backed by Y Combinator.\n\nFunded by leading investors.\n")
+    code, out = lex(run, tmp_path, "--strict")
+    assert "01.md:1 third-party endorsement claim" in out
+    assert "01.md:3 third-party endorsement claim" in out
