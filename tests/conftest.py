@@ -37,6 +37,20 @@ def run(bc, capsys):
     return _run
 
 
+@pytest.fixture(scope="session")
+def ba():
+    return _load("brandassets")
+
+
+@pytest.fixture
+def ba_run(ba, capsys):
+    """Run the brandassets CLI in-process; return (exit code, stdout)."""
+    def _run(*argv):
+        code = ba.main([str(a) for a in argv])
+        return code, capsys.readouterr().out
+    return _run
+
+
 @pytest.fixture
 def write(tmp_path):
     def _write(rel: str, text: str) -> pathlib.Path:
