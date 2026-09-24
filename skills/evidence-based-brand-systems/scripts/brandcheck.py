@@ -232,11 +232,69 @@ def fmt_ratio(r: float) -> str:
 THRESHOLDS = {"normal": 4.5, "large": 3.0, "ui": 3.0, "aaa": 7.0, "aaa-large": 4.5}
 
 
+THEMES = ("light", "dark")
+
+
+def _is_ref(v: str) -> bool:
+    return v.startswith("--") or v.lower().startswith("var(")
+
+
+class _Palette:
+    """Resolves pairs.tsv cells against tokens.css, one theme at a time.
+
+    Iron Law 4 applies to pairings too: a row holding a hex copied out of the
+    token file verifies the copy, and keeps passing after the token changes.
+    A row that NAMES tokens is resolved fresh on every run.
+    """
+
+    def __init__(self, path: Optional[str]):
+        self.path = path
+        self.tok = parse_token_css(open(path, encoding="utf-8").read()) if path else None
+        self.shipped: List[RGBA] = []
+        if self.tok:
+            for theme in THEMES:
+                table = self.tok.theme(theme)
+                for name in table:
+                    try:
+                        self.shipped.append(parse_colour(resolve_var(table[name], table)))
+                    except ValueError:
+                        pass
+
+    def resolve(self, cell: str, theme: str) -> str:
+        if not _is_ref(cell):
+            return cell
+        if not self.tok:
+            raise ValueError(f"{cell} names a token, but there is no tokens.css to resolve "
+                             f"it against (pass --tokens PATH)")
+        expr = f"var({cell})" if cell.startswith("--") else cell
+        value = resolve_var(expr, self.tok.theme(theme))
+        if "var(" in value:
+            raise ValueError(f"unknown token {cell} in the {theme} theme")
+        return value
+
+    def ships(self, literal: str) -> bool:
+        c = parse_colour(literal)
+        return any(all(abs(x - y) <= 0.5 for x, y in zip(c[:3], t[:3]))
+                   and abs(c[3] - t[3]) <= 0.005 for t in self.shipped)
+
+
+def _describe(cell: str, value: str) -> str:
+    return f"{cell} ({value})" if _is_ref(cell) else cell
+
+
 def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
     rep.section(f"CONTRAST · {args.pairs}")
     if not os.path.exists(args.pairs):
         rep.fail(f"pairs file not found: {args.pairs}")
         return
+    tokens = getattr(args, "tokens", None)
+    if not tokens:
+        beside = os.path.join(os.path.dirname(args.pairs) or ".", "tokens.css")
+        tokens = beside if os.path.exists(beside) else None
+    elif not os.path.exists(tokens):
+        rep.fail(f"tokens file not found: {tokens}")
+        return
+    palette = _Palette(tokens)
 
     rows, seen = [], set()
     for lineno, raw in enumerate(open(args.pairs, encoding="utf-8"), 1):
@@ -245,10 +303,11 @@ def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
             continue
         parts = line.split("\t")
         if len(parts) < 4:
-            rep.fail(f"line {lineno}: expected 4 tab-separated fields "
-                     f"(name, fg, bg, threshold), got {len(parts)}")
+            rep.fail(f"line {lineno}: expected 4 or 5 tab-separated fields "
+                     f"(name, fg, bg, threshold[, theme]), got {len(parts)}")
             continue
         name, fg, bg, thr_raw = (p.strip() for p in parts[:4])
+        theme_raw = parts[4].strip().lower() if len(parts) > 4 and parts[4].strip() else ""
         thr = THRESHOLDS.get(thr_raw.lower(), None)
         if thr is None:
             try:
@@ -257,25 +316,43 @@ def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
                 rep.fail(f"line {lineno}: threshold {thr_raw!r} is not a number "
                          f"or one of {', '.join(THRESHOLDS)}")
                 continue
-        try:
-            r = ratio(fg, bg)
-        except ValueError as exc:
-            rep.fail(f"line {lineno}: {exc}")
+        uses_tokens = _is_ref(fg) or _is_ref(bg)
+        if theme_raw and theme_raw not in ("light", "dark", "both"):
+            rep.fail(f"line {lineno}: theme {theme_raw!r} is not light, dark or both")
             continue
-        key = (fg.lower(), bg.lower(), thr)
-        rows.append((name, fg, bg, r, thr, key in seen))
-        seen.add(key)
+        themes = (THEMES if theme_raw in ("", "both") else (theme_raw,)) if uses_tokens \
+            else ("",)
+        for theme in themes:
+            label = f"{name} ({theme})" if theme else name
+            try:
+                fv, bv = palette.resolve(fg, theme or "light"), palette.resolve(bg, theme or "light")
+                for cell, value in ((fg, fv), (bg, bv)):
+                    if not _is_ref(cell) and palette.tok and not palette.ships(value):
+                        raise ValueError(
+                            f"{cell} matches no token in {os.path.basename(tokens)}, so this "
+                            f"row verifies a colour the system does not ship (a stale copy?). "
+                            f"Name the token instead.")
+                f, b = resolve_pair(fv, bv)
+            except ValueError as exc:
+                rep.fail(f"line {lineno}: {label}: {exc}")
+                continue
+            note = (f" composited {to_hex(f)}" if parse_colour(fv)[3] < 1.0 else "")
+            key = (to_hex(f), to_hex(b), thr)
+            rows.append((label, _describe(fg, fv), _describe(bg, bv), contrast_of(f, b),
+                         thr, key in seen, note))
+            seen.add(key)
 
     if not rows:
-        rep.fail("no pairings found — an empty contrast file is not a passing contrast file")
+        if not rep.failures:
+            rep.fail("no pairings found — an empty contrast file is not a passing contrast file")
         return
 
     width = max(len(r[0]) for r in rows)
     failures = 0
-    for name, fg, bg, r, thr, dup in rows:
+    for name, fg, bg, r, thr, dup, note in rows:
         mark = _c("PASS", GRN) if r >= thr else _c("FAIL", RED)
         dupe = _c("  (duplicate pair)", DIM) if dup else ""
-        print(f"  {mark}  {name:<{width}}  {fg} on {bg}  "
+        print(f"  {mark}  {name:<{width}}  {fg} on {bg}{note}  "
               f"{fmt_ratio(r):>6}:1  needs {thr}:1{dupe}")
         if r < thr:
             failures += 1
@@ -1316,7 +1393,9 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
     cmd_tokens(argparse.Namespace(dir=d, css=None, json=None), rep)
     pairs = getattr(args, "pairs", None) or os.path.join(d, "pairs.tsv")
     if os.path.exists(pairs):
-        cmd_contrast(argparse.Namespace(pairs=pairs), rep)
+        css = os.path.join(d, "tokens.css")
+        cmd_contrast(argparse.Namespace(pairs=pairs,
+                                        tokens=css if os.path.exists(css) else None), rep)
     else:
         rep.section("CONTRAST")
         rep.fail(f"no pairings file at {pairs}. Every foreground/background pairing the "
@@ -1336,8 +1415,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     c = sub.add_parser("contrast", help="compute every declared foreground/background pairing")
-    c.add_argument("pairs", help="TSV: name<TAB>fg<TAB>bg<TAB>threshold "
-                                 "(4.5 | 3.0 | normal | large | ui | aaa)")
+    c.add_argument("pairs", help="TSV: name<TAB>fg<TAB>bg<TAB>threshold[<TAB>theme]; fg and "
+                                 "bg are colours or token names (--x or var(--x))")
+    c.add_argument("--tokens", help="tokens.css to resolve token names against "
+                                    "(default: tokens.css beside the pairs file)")
     c.set_defaults(fn=cmd_contrast)
 
     t = sub.add_parser("tokens", help="CSS<->JSON agreement, theme parity, var() resolution")
