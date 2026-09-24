@@ -1,6 +1,6 @@
 ---
 name: evidence-based-brand-systems
-description: Use when creating, overhauling, or auditing a brand identity, visual identity, design language, brand book, brand guidelines, design tokens, or style guide for any company or product; when a brand system must survive accessibility, legal, procurement, or trademark review; when a pre-launch or zero-customer company needs credibility without fabricated proof; or when brand documentation has drifted from what was actually built.
+description: Use when creating, overhauling, or auditing a brand identity, visual identity, design language, brand book, brand guidelines, design tokens, or style guide for any company or product; when a logo, wordmark, favicon set, app icon or social share image has to be made or checked; when a brand system must survive accessibility, legal, procurement, or trademark review; when a pre-launch or zero-customer company needs credibility without fabricated proof; or when brand documentation has drifted from what was actually built.
 ---
 
 # Evidence-Based Brand Systems
@@ -23,12 +23,12 @@ This skill closes both: a pipeline that grounds every decision in the project's 
 Copy this into your working notes and check items off. Do not skip stages — stage 4 is worthless without stage 2, and stage 6 is what makes any of it defensible.
 
 ```
-[ ] 1. GROUND    — the project's own documents; fact base; stage honesty
+[ ] 1. GROUND    — the project's own documents; fact base; stage honesty; forbidden-claims.txt
 [ ] 2. RESEARCH  — category, competitors, craft benchmarks, references (all fetched)
 [ ] 3. DIRECT    — 3 distinct territories, scored matrix, one selected
 [ ] 4. SPECIFY   — visual system, every decision traced to strategy + territory
-[ ] 5. BUILD     — tokens + style tile; every specified device implemented
-[ ] 6. VERIFY    — brandcheck passes; rendered checks pass; adversarial review passes
+[ ] 5. BUILD     — tokens (export JSON), pairs by token name, style tile, asset set
+[ ] 6. VERIFY    — brandcheck all passes (render + assets included); sheet reviewed; adversarial review passes
 [ ] 7. GOVERN    — application rules, co-branding, trademark, handoff
 ```
 
@@ -41,7 +41,7 @@ Individually citable. Quote them by number in review.
 1. **Compute, never eyeball.** Every foreground/background pairing that ships is declared in `pairs.tsv` and computed. An undeclared pairing is an unverified pairing.
 2. **Inspect the binary, never the specimen.** Font claims — glyph coverage, tabular figures, axes, licence — come from the actual file via `fontTools`, not from a foundry page.
 3. **Build what you specify.** A device named in the guidelines and absent from the artifact is a defect in both. Specification and implementation ship together or neither ships.
-4. **One source of truth.** Tokens live in exactly one authored format. Every other format is generated from it and mechanically diffed against it.
+4. **One source of truth.** Tokens live in exactly one authored format. Every other format is generated from it and mechanically diffed against it. `tokens.css` is authored; `brandcheck export` writes `tokens.json`; `pairs.tsv` names tokens and never holds a copied value.
 5. **Three labels, never blended.** *Verified* (read from the implementation), *observed* (seen rendered, not confirmed), *interpretation* (your judgement). Mixing them is how taste gets laundered into fact.
 6. **Invented proof never ships.** No customer logos, badges, counts, awards, testimonials, analyst marks, or screenshots-as-production the company has not earned. Not as placeholders. Not "for the pitch".
 7. **Stage honesty is strategy.** State plainly what proof does not yet exist. For a zero-customer company, the slot is *deleted*, not filled with something weaker.
@@ -58,21 +58,29 @@ Not a prohibition list — a contract. The output is these files, and each has r
 | `01-brand-identity.md` | Assumptions (at top) · purpose, promise, positioning · audience · what it is / is not · personality traits with failure modes · values with observable behaviour · voice with rewrite examples · naming, pronunciation, trademark status · taglines · approved descriptions |
 | `02-creative-direction.md` | All research with labels and dates · ≥3 distinct territories · scored decision matrix · selected territory + written rationale · rejected territories with reasons · competitor differentiation check · reference-independence check |
 | `03-visual-direction.md` | Every major decision annotated: **Decision / Strategy / Territory / Reference influence / Adaptation** · colour with usage + prohibited usage + pairing · type scale as quads · spacing, grid, imagery, iconography, motion |
-| `04-brand-guidelines.md` | Wordmark construction in reproducible units · **every pairing with its computed ratio** · voice in application (buttons, errors, empty states) · brand applications · co-branding · prohibited applications |
+| `04-brand-guidelines.md` | Wordmark construction in reproducible units, taken from the wordmark's construction record · **every pairing with its computed ratio** · voice in application (buttons, errors, empty states) · brand applications, each pointing at its file in `assets/` · co-branding · prohibited applications, with every forbidden phrase in quotation marks |
 | `05-design-system.md` | Foundations · every component with all states, keyboard, screen-reader, misuse · completed self-review checklist |
 | `tokens.css` | Three layers: core → semantic → component. Themes by semantic remap only |
-| `tokens.json` | Generated mirror. Must agree value-for-value |
-| `style-tile.html` | Self-contained (fonts self-hosted, not CDN-dependent), no build, no image assets, both themes, visible focus, reduced-motion, every specified device rendered |
-| `pairs.tsv` | Every shipped pairing: `name<TAB>fg<TAB>bg<TAB>threshold` |
+| `tokens.json` | Generated by `brandcheck export`, never typed. The check regenerates it and compares |
+| `style-tile.html` | Self-contained (fonts embedded as `data:` URIs), no build, no image files, both themes, visible focus, reduced-motion, every specified device rendered, wordmark and mark as inline SVG |
+| `pairs.tsv` | Every shipped pairing, naming tokens: `name<TAB>--fg-token<TAB>--bg-token<TAB>threshold[<TAB>theme]` |
+| `forbidden-claims.txt` | Stage 1's claims this company may not make at its stage, one per line with its reason. `brandcheck` fails any that appears |
+| `og-card.html` | The share card as a page: tokens, embedded fonts, inline wordmark, no unearned proof |
+| `assets/` | `wordmark.svg`, `mark.svg`, `icon.svg`, `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-mask.png`, `avatar.png`, `og-default.png`, `manifest.webmanifest`, `head-snippet.html`, built with `scripts/brandassets.py` |
+| `fonts/` | The WOFF2/TTF files the system uses, with their licence file beside them |
+| `scripts/` | Copies of `brandcheck.py` and `brandassets.py` at the version used (Iron Law 9) |
 
 Templates for all of these: `templates/`.
 
 ## Verify
 
 ```bash
-python3 scripts/brandcheck.py all BRAND_DIR      # tokens + contrast + lexicon
-python3 scripts/brandcheck.py fonts FONT.ttf --glyphs "=≠?→✓" --licence OFL.txt
+python3 scripts/brandcheck.py export BRAND_DIR          # after every tokens.css edit
+python3 scripts/brandcheck.py all BRAND_DIR --glyphs "=≠?→✓"
+python3 scripts/brandassets.py sheet BRAND_DIR/assets   # then review asset-sheet.html by eye
 ```
+
+`all` runs tokens, contrast, lexicon with the forbidden claims, every font in `fonts/` against its licence, the asset set, and the rendered layer (`render`: every painted pairing declared and passing, in both themes at 320 and 1440px, plus overflow, focus and reduced motion). Pass `--glyphs` the characters the system actually relies on. For a company with no public proof yet, add `--strict` so unreferenced proof claims fail instead of warn. `render` and the raster assets need Playwright with Chromium; `wordmark` needs uharfbuzz. If `all` warns that the rendered layer did not run, Iron Law 1 is unverified: that is not a pass.
 
 Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it cannot judge — differentiation, strategic fit, whether the thing is any good — is the adversarial review in `references/verification.md`. Both are required.
 
@@ -89,6 +97,10 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 | "This reference site is exactly right for them" | Then you have designed that company's brand, not this one's. Take the method. |
 | "Accessibility can be a fast-follow" | It is a legal requirement in the EU (EAA, June 2025) and under ADA Title II. It is also ten times cheaper before the palette is signed off. |
 | "I reviewed it carefully" | Reviewing is not measuring. Run the checks. |
+| "I'll write tokens.json to match; it's quicker than exporting" | A typed mirror is a second authored format. `brandcheck export`, every time. |
+| "I'll put the hex values in pairs.tsv" | A copied hex keeps passing after the token changes. Name the token. |
+| "The render step needs a browser; the static checks passed" | Then no check proves every painted pairing is declared. Install Chromium. A warning is not a pass. |
+| "The logo is just the name in the brand font" | Live text renders in whatever font the viewer has. Outline it with `brandassets wordmark`, and build the rest of the set. |
 | "The strategy documents don't say, so I'll use my judgement" | Unknowns are flagged as open decisions for the owner, never filled with something plausible. |
 
 ## Red flags — stop and re-ground
@@ -101,6 +113,9 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 - A palette that resembles the reference you studied most recently
 - A checklist item you are about to tick that a reviewer could falsify
 - The words "obviously", "clearly", or "should be fine" attached to a measurable claim
+- A `tokens.json` you typed, or a hex value you copied into `pairs.tsv`
+- A logo file with `<text>` in it, or a guideline naming an asset that `assets/` does not hold
+- A forbidden phrase in a guideline without quotation marks around it
 
 ## Reference routing
 
@@ -109,7 +124,8 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 | `references/pipeline.md` | Before starting. The full protocol for all seven stages, including how to research sites and label evidence, and how to develop and score territories |
 | `references/visual-system.md` | Stage 4. Colour, themes, typography, grid, plates, graphic language, texture, imagery, data, motion |
 | `references/accessibility.md` | Stages 4–6. Thresholds, exemptions, the anti-rounding rule, the formulas, the legal position |
-| `references/tokens-and-type.md` | Stage 5. Three-tier architecture, naming, theming, DTCG 2025.10, font verification and licensing |
+| `references/tokens-and-type.md` | Stage 5. Three-tier architecture, naming, theming, DTCG 2025.10 export, pairs by token, font verification and licensing |
+| `references/assets.md` | Stage 5. Wordmark, mark, icon set, avatar and share card: how to build them and what the checks enforce |
 | `references/governance.md` | Stage 7. Brand architecture, co-branding, trademark, regulated review, localisation, handoff |
 | `references/verification.md` | Stage 6. Mechanical, rendered and adversarial review, plus the self-review checklist |
 

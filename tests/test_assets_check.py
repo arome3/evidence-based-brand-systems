@@ -2,7 +2,7 @@
 and are built correctly. Iron Law 3: build what you specify."""
 import json
 
-from imgutil import BG, FG, centred, ico, png, solid_png, valid_assets
+from imgutil import centred, ico, solid_png, valid_assets
 
 
 def test_a_complete_asset_set_passes(run, tmp_path):

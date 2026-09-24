@@ -84,7 +84,7 @@ Gradient fields, shader backgrounds, particle drift, blur bloom and ambient loop
 
 Decide what the brand shows *instead of* the category's stock imagery. Specify allowed / discouraged / prohibited per category: evidence, source material, product, abstract graphics, photography, illustration, data visualisation.
 
-**Aim for zero required image assets in version one.** It keeps the system implementable by one person, keeps it fast, and forces the graphic language to do real work. If AI-generated imagery is ever used, **disclose it on the surface where it appears** — a rare convention, and the one most compatible with a brand claiming accuracy.
+**Aim for zero required image assets in version one.** This is about imagery (photography, illustration, textures as files). The identity's own export set, the outlined wordmark, the mark and the icons in `assets/`, is required, and `assets.md` covers it. It keeps the system implementable by one person, keeps it fast, and forces the graphic language to do real work. If AI-generated imagery is ever used, **disclose it on the surface where it appears** — a rare convention, and the one most compatible with a brand claiming accuracy.
 
 ## Data presentation
 

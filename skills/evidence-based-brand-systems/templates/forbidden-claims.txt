@@ -1,0 +1,17 @@
+# Claims this company may not make at its current stage.
+#
+# One per line: the phrase, a TAB, the reason. A plain phrase matches however
+# it is spaced or hyphenated ("bank-grade" also catches "bank grade"). A line
+# starting re: is a regular expression. Blank lines and # comments are ignored.
+#
+# Written at pipeline stage 1 from "Claims forbidden at this stage" and from
+# anything the owner's documents rule out. Enforced by:
+#   python3 scripts/brandcheck.py all BRAND_DIR
+#   python3 scripts/brandcheck.py lexicon SITE_DIR --claims BRAND_DIR/forbidden-claims.txt
+#
+# Negation words and dates do not clear a forbidden claim: "Bank-grade
+# controls, audit pending" still makes it. Quotation marks do, which is how a
+# prohibition list names what it forbids: Never write "bank-grade".
+#
+# Replace the example below with this company's own list.
+# <phrase>	<reason: what would have to be true first, and as of when it is not>

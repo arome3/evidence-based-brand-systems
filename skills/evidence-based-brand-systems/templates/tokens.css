@@ -1,8 +1,9 @@
 /* ============================================================================
    <BRAND> — Design Tokens
    Version 1.0 · <DATE>
-   Mirror of tokens.json. Values in the two files must agree; verify with
-   `python3 scripts/brandcheck.py tokens .`
+   The source of truth. tokens.json is GENERATED from this file; never edit it:
+     python3 scripts/brandcheck.py export .
+   Re-export after every edit. `brandcheck tokens` regenerates and compares.
 
    ARCHITECTURE — three layers. Never skip one in component CSS.
      1. core       --b-core-*     raw values, named by scale position only
@@ -20,7 +21,9 @@
   /* Neutral ramp. One ramp can serve both themes if the steps are chosen for it. */
   --b-core-neutral-0:   #ffffff;
   --b-core-neutral-100: #______;
+  --b-core-neutral-300: #______;   /* dark-theme meta text and borders */
   --b-core-neutral-500: #______;   /* control borders live around here: needs 3:1 */
+  --b-core-neutral-800: #______;   /* dark-theme surface */
   --b-core-neutral-900: #______;
   --b-core-neutral-950: #______;
 
@@ -48,20 +51,35 @@
 
 /* ------------------------------------------------------ 2. SEMANTIC — DARK
    Ship BOTH blocks with identical values. The :not([data-theme="light"])
-   guard is what lets an explicit light choice beat a dark OS preference. */
+   guard is what lets an explicit light choice beat a dark OS preference.
+   Remap EVERY semantic colour. A token left out keeps its light value: a
+   forgotten surface puts light text on a white card, and only a pairs.tsv
+   row naming that surface, or `brandcheck render`, will catch it. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --b-color-bg-page:      var(--b-core-neutral-950);
-    --b-color-text-primary: var(--b-core-neutral-100);
-    --b-color-accent:       var(--b-core-accent-500);
+    --b-color-bg-page:        var(--b-core-neutral-950);
+    --b-color-bg-surface:     var(--b-core-neutral-800);
+    --b-color-text-primary:   var(--b-core-neutral-100);
+    --b-color-text-meta:      var(--b-core-neutral-300);
+    --b-color-border-control: var(--b-core-neutral-300);
+    --b-color-border-rule:    var(--b-core-neutral-800);
+    --b-color-accent:         var(--b-core-accent-500);
+    --b-color-focus-ring:     var(--b-core-accent-500);
+    --b-color-text-on-accent: var(--b-core-neutral-950);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --b-color-bg-page:      var(--b-core-neutral-950);
-  --b-color-text-primary: var(--b-core-neutral-100);
-  --b-color-accent:       var(--b-core-accent-500);
+  --b-color-bg-page:        var(--b-core-neutral-950);
+  --b-color-bg-surface:     var(--b-core-neutral-800);
+  --b-color-text-primary:   var(--b-core-neutral-100);
+  --b-color-text-meta:      var(--b-core-neutral-300);
+  --b-color-border-control: var(--b-core-neutral-300);
+  --b-color-border-rule:    var(--b-core-neutral-800);
+  --b-color-accent:         var(--b-core-accent-500);
+  --b-color-focus-ring:     var(--b-core-accent-500);
+  --b-color-text-on-accent: var(--b-core-neutral-950);
 }
 
 /* --------------------------------------------------------- 3. TYPOGRAPHY

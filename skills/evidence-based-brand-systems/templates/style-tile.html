@@ -5,9 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><BRAND> — Style Tile</title>
 <style>
-/* Remote import is for preview convenience only. Every stack falls back to
-   system faces, and this page is TESTED with the import blocked. */
-@import url('https://fonts.googleapis.com/css2?family=<FAMILY>&display=swap');
+/* Fonts are EMBEDDED, so the tile opens offline and on locked-down networks.
+   One @font-face per face, its src a data: URI of the WOFF2 in fonts/:
+     python3 -c "import base64,sys;print(base64.b64encode(open(sys.argv[1],'rb').read()).decode())" fonts/<FILE>.woff2
+   A src pointing at a URL or a file is a dependency, and brandcheck fails it.
+   `brandcheck render` renders this page offline, so a missing face shows. */
+@font-face { font-family: "<FAMILY>"; font-weight: 100 900; font-display: swap;
+             src: url(data:font/woff2;base64,<BASE64>) format("woff2"); }
 
 /* ===== TOKENS — paste from tokens.css. Component CSS uses var() only. ===== */
 :root { /* core → semantic, light */ }
@@ -44,6 +48,11 @@ td.num,th.num{text-align:right;font-variant-numeric:var(--b-font-numeric-tabular
 <body>
 
 <!-- Every section below is REQUIRED. Delete none of them. -->
+<!-- The wordmark and mark appear as INLINE SVG from assets/ (drop the <metadata>),
+     with fill="currentColor" and colour set by a CSS class that reads a token:
+     .wm { color: var(--b-color-text-primary) }. Never a hex in an SVG attribute.
+     A logotype below its pairing threshold is exempt from 1.4.3; mark it
+     data-contrast-exempt="logotype" and `brandcheck render` lists it. -->
 <nav><!-- wordmark · pronunciation cue · links · theme control --></nav>
 
 <main>
@@ -55,7 +64,8 @@ td.num,th.num{text-align:right;font-variant-numeric:var(--b-font-numeric-tabular
        this is the signature component, not a decorative image. -->
   <section><!-- signature component, with specimen labelling --></section>
 
-  <section><!-- IDENTITY: wordmark, lockup, endorsement, pronunciation, descriptor --></section>
+  <section><!-- IDENTITY: wordmark, mark, lockup, endorsement, pronunciation, descriptor,
+                 clear space and minimum size drawn to the construction record --></section>
   <section><!-- COLOUR: grounds, ink, accent, status. Show hex values as text. --></section>
   <section><!-- TYPE: full scale specimen, each row labelled with its token values --></section>
   <section><!-- SPACING: the scale, drawn --></section>

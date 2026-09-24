@@ -18,7 +18,7 @@ Python 3.9+.
 """
 from __future__ import annotations
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 import argparse
 import json
@@ -1734,8 +1734,9 @@ def cmd_render(args: argparse.Namespace, rep: Report) -> None:
         items = unique(items)
         it = items[0]
         r = contrast_of(parse_colour(fh), parse_colour(bh))
+        more = f" ({len(items)} elements)" if len(items) > 1 else ""
         rep.fail(f"{theme}: {it['where']} \"{it['text']}\" renders {fh} on {bh} at "
-                 f"{fmt_ratio(r)}:1, needs {thr}:1" + (f" ({len(items)} elements)" if len(items) > 1 else ""))
+                 f"{fmt_ratio(r)}:1, needs {thr}:1{more}")
     for (theme, fh, bh), items in sorted(undeclared.items()):
         items = unique(items)
         it = items[0]
@@ -1890,8 +1891,8 @@ def _check_logo_svg(path: str, rep: Report) -> None:
             problems.append("its <style> fetches something outside the file")
     if problems:
         rep.fail(f"{name}: " + "; ".join(sorted(set(problems))) + ". A logo file is outlined "
-                 f"paths in one self-contained SVG: live text renders in whatever font the "
-                 f"viewer has.")
+                 "paths in one self-contained SVG: live text renders in whatever font the "
+                 "viewer has.")
         return
     rep.ok(f"{name}: outlined, self-contained vector (viewBox {root.get('viewBox')})")
     if name == "wordmark.svg":

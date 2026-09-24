@@ -18,7 +18,9 @@ Produce a fact base with a row per claim the brand will make, each carrying its 
 | Certifications actually held | Decides whether a badge row exists |
 | Funding, publicly announced | Decides whether an investor line exists |
 | Metrics you can evidence | Decides whether numbers appear |
-| Claims forbidden at this stage | Becomes the prohibited-applications list |
+| Claims forbidden at this stage | Becomes the prohibited-applications list, and `forbidden-claims.txt` |
+
+**Write `forbidden-claims.txt` now**, from that last row and from anything the owner's documents rule out: one claim per line, a TAB, then the reason (`templates/forbidden-claims.txt`). A plain phrase matches however it is spaced or hyphenated; a line starting `re:` is a regular expression. `brandcheck lexicon` and `all` fail any hit in any document or page, and quotation marks are the only thing that clears one. That is how a prohibition list quotes the phrases it forbids. Point `--claims` at the file to gate a landing page kept elsewhere.
 
 **Anything the brand needs that no document answers becomes an open question for the owner.** Never resolve an unknown by inventing something plausible. A flagged gap is a deliverable; a filled gap is a fabrication.
 
@@ -112,19 +114,22 @@ Detail: `visual-system.md`.
 
 Before leaving this stage, list every device named in stage 4 and point at where it is implemented. Anything unimplemented is either built now or struck from the specification.
 
-- Tokens: one authored format, every other generated and mechanically diffed. See `tokens-and-type.md`.
-- Style tile: self-contained, no build step, no image assets, both themes, visible focus, reduced-motion respected, every specified device rendered, all specimen content visibly labelled.
+- **Tokens:** author `tokens.css`, then generate `tokens.json` with `python3 scripts/brandcheck.py export BRAND_DIR`. Re-export after every edit; never type the JSON. The dark block remaps every semantic colour token, not just the page ground. See `tokens-and-type.md`.
+- **Pairs:** every row of `pairs.tsv` names its tokens (`--b-color-text-primary`), so it is resolved fresh on every run, in both themes unless a fifth column says `light` or `dark`. Every surface a colour can sit on gets its own row.
+- **Style tile:** self-contained (fonts embedded as `data:` URIs), no build step, no image files, both themes, visible focus, reduced-motion respected, every specified device rendered, all specimen content visibly labelled. The wordmark and mark appear as inline SVG coloured by CSS classes that read tokens. Mark a logotype or decorative element `data-contrast-exempt="reason"`.
+- **Assets:** the wordmark, mark, icon set, avatar and share card, built with `scripts/brandassets.py`. See `assets.md`.
+- **Scripts and fonts:** copy `brandcheck.py` and `brandassets.py` into `BRAND_DIR/scripts/`, and put the font files with their licence in `BRAND_DIR/fonts/`.
 
 ---
 
 ## 6. VERIFY — mechanical, then adversarial, then rendered
 
 ```bash
-python3 scripts/brandcheck.py all BRAND_DIR
-python3 scripts/brandcheck.py fonts FONT.ttf --glyphs "…" --licence OFL.txt
+python3 scripts/brandcheck.py all BRAND_DIR --glyphs "=≠?→✓"   # the glyphs the system relies on
+python3 scripts/brandassets.py sheet BRAND_DIR/assets
 ```
 
-Then the rendered checks — actually open it: desktop and mobile widths, both themes, keyboard focus, reduced motion, and with the webfonts blocked. Then the adversarial review.
+`all` includes the rendered layer (`render`) and the asset checks. Then do what no command can: review `asset-sheet.html` by eye, work through the manual items in `verification.md` Layer 2, and run the adversarial review.
 
 Full protocol: `verification.md`.
 

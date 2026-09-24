@@ -110,19 +110,25 @@ When a rule is later reversed, **amend in place and say so**. A silently edited 
 ## 04-brand-guidelines.md
 
 ```
-## Wordmark             construction (reproducible units) · clear space · minimum size ·
-                        light / dark / monochrome · misuse · pre-registration handling
+## Wordmark             construction (reproducible units, from the construction record in
+                        assets/wordmark.svg) · clear space · minimum size · light / dark /
+                        monochrome via currentColor · the mark and when each is used ·
+                        misuse · pre-registration handling
 ## Colour pairing       EVERY pairing: fg token · bg token · fg hex · bg hex ·
                         computed ratio · threshold · pass/fail · intended use
                         + documented exemptions (disabled, decorative, logotype)
 ## Voice in application buttons · forms · empty states · errors · warnings ·
                         loading · completion · uncertainty
-## Brand applications   email signature · avatar · OG image · report · proposal ·
-                        product UI · presentation
+## Brand applications   email signature · avatar (assets/avatar.png) · share card
+                        (og-card.html -> assets/og-default.png) · favicon and app icons
+                        (assets/, head-snippet.html) · report · proposal · product UI ·
+                        presentation. Every application that names a file points at it.
 ## Parent relationship  lockup · placement · size · clear space · when required/omitted
 ## Partners             co-branding posture; for a pre-launch company the slot
                         DOES NOT EXIST
-## Prohibited           everything that must never appear
+## Prohibited           everything that must never appear. Quote every forbidden phrase:
+                        the lexicon gate clears a forbidden claim only inside quotation
+                        marks, and the same phrases live in forbidden-claims.txt
 ```
 
 ---
