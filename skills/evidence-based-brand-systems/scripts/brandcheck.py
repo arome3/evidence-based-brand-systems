@@ -426,7 +426,9 @@ def _render_value(raw):
     """
     if isinstance(raw, dict):
         if "hex" in raw:
-            return str(raw["hex"])
+            # The hex fallback is 6 digits by spec; carry alpha alongside it.
+            a = raw.get("alpha", 1)
+            return str(raw["hex"]) + (f"{int(round(float(a) * 255)):02x}" if a < 1 else "")
         if "colorSpace" in raw and "components" in raw:
             comps = " ".join(str(c) for c in raw["components"])
             alpha = f" / {raw['alpha']}" if "alpha" in raw else ""
@@ -435,8 +437,44 @@ def _render_value(raw):
             return f"{raw['value']}{raw['unit']}"
         return json.dumps(raw, sort_keys=True, separators=(",", ":"))
     if isinstance(raw, list):
+        if len(raw) == 4 and all(isinstance(x, (int, float)) for x in raw):
+            return "cubic-bezier(" + ", ".join(str(x) for x in raw) + ")"
+        if all(isinstance(x, str) for x in raw):          # fontFamily
+            return ", ".join(f'"{x}"' if " " in x else x for x in raw)
         return json.dumps(raw, separators=(",", ":"))
     return str(raw)
+
+
+_NUM_UNIT = re.compile(r"^(-?(?:\d+\.?\d*|\.\d+))([a-z%]*)$", re.I)
+
+
+def same_value(a: str, b: str) -> bool:
+    """Do a CSS value and a rendered JSON value mean the same thing?
+
+    Compared as values, not strings: .5rem is 0.5rem, #f0efe999 is
+    rgb(240 239 233 / 0.6), and a font stack's quoting is not a difference.
+    """
+    a, b = " ".join(a.split()), " ".join(b.split())
+    if a.lower() == b.lower():
+        return True
+    try:
+        ca, cb = parse_colour(a), parse_colour(b)
+        return all(abs(x - y) <= 0.5 for x, y in zip(ca[:3], cb[:3])) \
+            and abs(ca[3] - cb[3]) <= 0.005
+    except ValueError:
+        pass
+    ma, mb = _NUM_UNIT.match(a), _NUM_UNIT.match(b)
+    if ma and mb:
+        return abs(float(ma.group(1)) - float(mb.group(1))) < 1e-9 and \
+            ma.group(2).lower() == mb.group(2).lower()
+    if a.lower().startswith("cubic-bezier(") and b.lower().startswith("cubic-bezier("):
+        na = [float(x) for x in re.findall(r"-?(?:\d+\.?\d*|\.\d+)", a)]
+        nb = [float(x) for x in re.findall(r"-?(?:\d+\.?\d*|\.\d+)", b)]
+        return len(na) == len(nb) and all(abs(x - y) < 1e-9 for x, y in zip(na, nb))
+
+    def norm(v):
+        return re.sub(r"\s*,\s*", ",", v.replace('"', "").replace("'", "")).lower()
+    return norm(a) == norm(b)
 
 
 def _walk_tokens(node, path, flat, dtcg):
@@ -452,7 +490,7 @@ def _walk_tokens(node, path, flat, dtcg):
     if not isinstance(node, dict):
         return
     for key, val in node.items():
-        if key.startswith("$") or not isinstance(val, dict):
+        if not isinstance(val, dict) or (key.startswith("$") and key != "$root"):
             continue
         has_value = "$value" in val or "value" in val
         if has_value:
@@ -460,7 +498,8 @@ def _walk_tokens(node, path, flat, dtcg):
             if key.startswith("--"):
                 flat[key] = rendered
             else:
-                dtcg[".".join(path + [key])] = rendered
+                # A $root token is its group's own value: a.b.$root is --a-b.
+                dtcg[".".join(path if key == "$root" else path + [key])] = rendered
         else:
             _walk_tokens(val, path + [key], flat, dtcg)
 
@@ -488,7 +527,7 @@ def _resolve_all(by_css_name, by_dtcg_path, max_depth=12):
                 return out[name] if name in out and out[name] != val else m.group(0)
 
             def dtcg_sub(m):
-                path = m.group(1)
+                path = m.group(1).replace(".$root", "")
                 if path in by_dtcg_path:
                     return by_dtcg_path[path]
                 css_name = _dtcg_to_css_name(path)
@@ -509,7 +548,7 @@ def _unresolved(value):
 
 
 def _dtcg_to_css_name(path):
-    return "--" + path.replace(".", "-")
+    return "--" + path.replace(".$root", "").replace(".", "-")
 
 
 EXTERNAL_REF = re.compile(
@@ -617,6 +656,146 @@ def _check_self_contained(name, text, rep):
                  f"they are the first thing to rot and the first thing a licence dispute touches.")
 
 
+# ───────────────────────────────────────────────────────────── export ──
+# Iron Law 4: tokens live in exactly one authored format and every other
+# format is GENERATED. tokens.css is authored; this writes tokens.json in DTCG
+# 2025.10 (https://www.designtokens.org/TR/2025.10/format/). The `tokens`
+# check regenerates the export and compares, so a hand edit is caught.
+
+NS = "org.evidence-based-brand-systems"
+_ALIAS = re.compile(r"^var\(\s*(--[a-zA-Z][\w-]*)\s*\)$")
+_NUMBER = re.compile(r"^-?(?:\d+\.?\d*|\.\d+)$")
+_DIMENSION = re.compile(r"^(-?(?:\d+\.?\d*|\.\d+))(px|rem)$")
+_DURATION = re.compile(r"^(-?(?:\d+\.?\d*|\.\d+))(ms|s)$")
+_BEZIER = re.compile(r"^cubic-bezier\(\s*([^)]*)\)$", re.I)
+_FAMILY_PART = re.compile(r"""^(?:"[^"]+"|'[^']+'|[A-Za-z][\w -]*)$""")
+
+
+def _num(text: str):
+    f = float(text)
+    return int(f) if f.is_integer() else f
+
+
+def _colour_value(raw: str) -> Optional[dict]:
+    try:
+        r, g, b, a = parse_colour(raw)
+    except ValueError:
+        return None
+    m = _COLOUR_FN.match(raw.strip())
+    if m and m.group(1).lower() == "oklch":
+        body = m.group(2).split("/")[0]
+        L, C, H = [p for p in re.split(r"[\s,]+", body.strip()) if p][:3]
+        comps = [_num(str(_pct_or_num(L, 1.0))), _num(str(_pct_or_num(C, 0.4))),
+                 _num(H.lower().replace("deg", ""))]
+        value = {"colorSpace": "oklch", "components": comps}
+    else:
+        value = {"colorSpace": "srgb",
+                 "components": [round(c / 255.0, 6) for c in (r, g, b)]}
+    if a < 1.0:
+        value["alpha"] = round(a, 4)
+    value["hex"] = to_hex((r, g, b, 1.0))
+    return value
+
+
+def _dtcg_token(name: str, raw: str, paths: Dict[str, List[str]]) -> Optional[dict]:
+    """One CSS declaration as a DTCG token, or None when no DTCG type fits."""
+    v = raw.strip()
+    m = _ALIAS.match(v)
+    if m:
+        target = paths.get(m.group(1))
+        return {"$value": "{" + ".".join(target) + "}"} if target else None
+    colour = _colour_value(v)
+    if colour is not None:
+        return {"$type": "color", "$value": colour}
+    m = _DIMENSION.match(v)
+    if m:
+        return {"$type": "dimension", "$value": {"value": _num(m.group(1)), "unit": m.group(2)}}
+    m = _DURATION.match(v)
+    if m:
+        return {"$type": "duration", "$value": {"value": _num(m.group(1)), "unit": m.group(2)}}
+    m = _BEZIER.match(v)
+    if m:
+        pts = [p.strip() for p in m.group(1).split(",")]
+        if len(pts) == 4 and all(_NUMBER.match(p) for p in pts):
+            return {"$type": "cubicBezier", "$value": [_num(p) for p in pts]}
+        return None
+    if _NUMBER.match(v):
+        n = _num(v)
+        if "weight" in name and 1 <= n <= 1000:
+            return {"$type": "fontWeight", "$value": n}
+        return {"$type": "number", "$value": n}
+    parts = [p.strip() for p in v.split(",")]
+    if (len(parts) > 1 or v[:1] in "\"'") and all(_FAMILY_PART.match(p) for p in parts):
+        return {"$type": "fontFamily", "$value": [p.strip("\"'") for p in parts]}
+    return None
+
+
+def _token_digest(tok: TokenCSS) -> str:
+    import hashlib
+    canon = json.dumps({"base": tok.base, "dark_media": tok.dark_media,
+                        "dark_attr": tok.dark_attr, "media": tok.media},
+                       sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def export_tokens(css: str, source: str) -> Tuple[dict, List[str]]:
+    """Return (DTCG document, names that have no DTCG type)."""
+    tok = parse_token_css(css)
+    raw_paths = {n: n[2:].split("-") for n in tok.base}
+    groups = {tuple(p[:i]) for p in raw_paths.values() for i in range(1, len(p))}
+    # A token whose path is also a group is that group's $root token.
+    paths = {n: p + (["$root"] if tuple(p) in groups else []) for n, p in raw_paths.items()}
+
+    doc: dict = {"$description": (
+        f"Generated by `brandcheck export` from {source}. Do not edit: edit {source} "
+        f"and re-run. Naming contract: JSON path a.b.c is CSS custom property --a-b-c; "
+        f"a.b.$root is --a-b.")}
+    css_only: Dict[str, str] = {}
+    for name, raw in tok.base.items():
+        token = _dtcg_token(name, raw, paths)
+        if token is None:
+            css_only[name] = raw
+            continue
+        node = doc
+        for seg in paths[name][:-1]:
+            node = node.setdefault(seg, {})
+        node[paths[name][-1]] = token
+    doc["$extensions"] = {NS: {
+        "generator": f"brandcheck {__version__}",
+        "source": source,
+        "sourceDigest": _token_digest(tok),
+        "cssOnly": css_only,
+        "themes": {"dark": dict(tok.dark)},
+        "media": {q: v for q, v in tok.media},
+    }}
+    return doc, list(css_only)
+
+
+def _dump(doc: dict) -> str:
+    return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+
+
+def cmd_export(args: argparse.Namespace, rep: Report) -> None:
+    css_path = os.path.join(args.src, "tokens.css") if os.path.isdir(args.src) else args.src
+    out_path = args.output or os.path.join(os.path.dirname(css_path) or ".", "tokens.json")
+    rep.section(f"EXPORT · {os.path.relpath(css_path)} -> {os.path.relpath(out_path)}")
+    if not os.path.exists(css_path):
+        rep.fail(f"missing {css_path}")
+        return
+    doc, css_only = export_tokens(open(css_path, encoding="utf-8").read(),
+                                  os.path.basename(css_path))
+    count = len(parse_token_css(open(css_path, encoding="utf-8").read()).base)
+    if not count:
+        rep.fail("no custom properties found in the CSS — is this a token file?")
+        return
+    with open(out_path, "w", encoding="utf-8") as fh:
+        fh.write(_dump(doc))
+    rep.ok(f"wrote {count - len(css_only)} DTCG 2025.10 token(s) to {os.path.relpath(out_path)}")
+    if css_only:
+        rep.note(f"{len(css_only)} token(s) have no DTCG type and travel as CSS in "
+                 f"$extensions.{NS}.cssOnly: {css_only[:6]}")
+
+
 def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
     d = args.dir
     css_path = args.css or os.path.join(d, "tokens.css")
@@ -666,78 +845,104 @@ def cmd_tokens(args: argparse.Namespace, rep: Report) -> None:
             rep.fail(f"tokens.json is not valid JSON: {exc}")
             return
         rep.ok("tokens.json parses as valid JSON")
-        flat, dtcg = {}, {}
-        _walk_tokens(data.get("tokens", data), [], flat, dtcg)
-        jtok = dict(flat)
-        derived = {_dtcg_to_css_name(k): v for k, v in dtcg.items()}
-        # Prefer explicit --names; fall back to the path convention.
-        for k, v in derived.items():
-            jtok.setdefault(k, v)
-
-        if not jtok:
-            rep.warn("no tokens recognised in the JSON — expected {\"value\": …} or DTCG "
-                     "{\"$value\": …} leaves. Skipping the agreement check.")
+        ext = (data.get("$extensions") or {}).get(NS, {}) if isinstance(data, dict) else {}
+        if ext.get("generator"):
+            _check_generated(data, css, os.path.basename(css_path), args.dir, rep)
         else:
-            overlap = len(set(base) & set(jtok))
-            coverage = overlap / max(len(base), 1)
-            if coverage < 0.5:
-                rep.fail(
-                    f"the two token files have no verifiable correspondence — only "
-                    f"{overlap} of {len(base)} CSS tokens could be matched to a JSON token "
-                    f"({coverage:.0%}). Either name JSON leaves with their CSS custom "
-                    f"property, or use the DTCG path convention where a.b.c maps to --a-b-c, "
-                    f"and state the contract in $description. Two formats that cannot be "
-                    f"diffed will drift, and nobody will notice.")
-                if dtcg:
-                    sample = list(dtcg)[:3]
-                    rep.note(f"JSON paths look like: {sample} -> "
-                             f"{[_dtcg_to_css_name(x) for x in sample]}")
-                    rep.note(f"CSS names look like: {list(base)[:3]}")
-            else:
-                base_r = _resolve_all(base, dtcg)
-                jtok_r = _resolve_all(jtok, dtcg)
-                missing = [k for k in base if k not in jtok]
-                extra = [k for k in jtok if k not in base]
-
-                def _same(a, b):
-                    a, b = " ".join(a.split()), " ".join(b.split())
-                    # A DTCG colour object renders to its hex fallback; a CSS
-                    # token holds the same hex. Those agree.
-                    if a.lower() == b.lower():
-                        return True
-                    try:
-                        ca, cb = parse_colour(a), parse_colour(b)
-                    except ValueError:
-                        return False
-                    return all(abs(x - y) <= 0.5 for x, y in zip(ca[:3], cb[:3])) \
-                        and abs(ca[3] - cb[3]) <= 0.005
-
-                comparable, unresolved = [], []
-                for k in base:
-                    if k not in jtok:
-                        continue
-                    a, b = base_r[k], jtok_r[k]
-                    (unresolved if (_unresolved(a) or _unresolved(b)) and not _same(a, b)
-                     else comparable).append((k, a, b))
-                diff = [(k, a, b) for k, a, b in comparable if not _same(a, b)]
-                if unresolved:
-                    rep.warn(f"{len(unresolved)} composite token(s) could not be fully "
-                             f"resolved for comparison (e.g. {unresolved[0][0]}) — verify "
-                             f"these by hand or emit resolved literals in the generated file")
-                if missing:
-                    rep.fail(f"{len(missing)} token(s) in CSS but absent from JSON: {missing[:5]}")
-                if extra:
-                    rep.warn(f"{len(extra)} token(s) in JSON with no CSS counterpart: {extra[:5]}")
-                if diff:
-                    rep.fail(f"{len(diff)} value mismatch(es), e.g. "
-                             + "; ".join(f"{k}: css={a!r} json={b!r}" for k, a, b in diff[:3]))
-                if not (missing or diff):
-                    rep.ok(f"all {len(comparable)} comparable tokens agree between CSS and JSON "
-                           f"({coverage:.0%} of the CSS set matched)")
+            _check_agreement(data, base, rep)
+            rep.warn("tokens.json was not produced by `brandcheck export`, so it is a second "
+                     "authored format (Iron Law 4). Generate it: "
+                     "python3 scripts/brandcheck.py export BRAND_DIR")
     else:
         rep.warn(f"no {os.path.basename(json_path)} found — shipping only one token format "
-                 f"means downstream tools cannot consume the system")
+                 f"means downstream tools cannot consume the system. Generate it: "
+                 f"python3 scripts/brandcheck.py export BRAND_DIR")
 
+    _check_markup(args.dir, css_path, css, tok, rep)
+
+
+def _check_generated(data: dict, css: str, source: str, d: str, rep: Report) -> None:
+    expected, _ = export_tokens(css, source)
+
+    def strip(doc):
+        doc = json.loads(json.dumps(doc))
+        doc.get("$extensions", {}).get(NS, {}).pop("generator", None)
+        return doc
+    if strip(expected) == strip(data):
+        rep.ok("tokens.json is the current export of tokens.css (generated, not hand-edited)")
+        return
+    if data["$extensions"][NS].get("sourceDigest") != expected["$extensions"][NS]["sourceDigest"]:
+        rep.fail("tokens.json is stale: tokens.css changed after the last export. "
+                 f"Regenerate: python3 scripts/brandcheck.py export {d}")
+    else:
+        rep.fail("tokens.json differs from the export of an unchanged tokens.css, so it was "
+                 "edited by hand. Edit tokens.css and regenerate: "
+                 f"python3 scripts/brandcheck.py export {d}")
+
+
+def _check_agreement(data: dict, base: Dict[str, str], rep: Report) -> None:
+    flat, dtcg = {}, {}
+    _walk_tokens(data.get("tokens", data), [], flat, dtcg)
+    jtok = dict(flat)
+    ext = (data.get("$extensions") or {}).get(NS, {})
+    jtok.update(ext.get("cssOnly", {}))
+    derived = {_dtcg_to_css_name(k): v for k, v in dtcg.items()}
+    # Prefer explicit --names; fall back to the path convention.
+    for k, v in derived.items():
+        jtok.setdefault(k, v)
+
+    if not jtok:
+        rep.warn("no tokens recognised in the JSON — expected {\"value\": …} or DTCG "
+                 "{\"$value\": …} leaves. Skipping the agreement check.")
+    else:
+        overlap = len(set(base) & set(jtok))
+        coverage = overlap / max(len(base), 1)
+        if coverage < 0.5:
+            rep.fail(
+                f"the two token files have no verifiable correspondence — only "
+                f"{overlap} of {len(base)} CSS tokens could be matched to a JSON token "
+                f"({coverage:.0%}). Either name JSON leaves with their CSS custom "
+                f"property, or use the DTCG path convention where a.b.c maps to --a-b-c, "
+                f"and state the contract in $description. Two formats that cannot be "
+                f"diffed will drift, and nobody will notice.")
+            if dtcg:
+                sample = list(dtcg)[:3]
+                rep.note(f"JSON paths look like: {sample} -> "
+                         f"{[_dtcg_to_css_name(x) for x in sample]}")
+                rep.note(f"CSS names look like: {list(base)[:3]}")
+        else:
+            base_r = _resolve_all(base, dtcg)
+            jtok_r = _resolve_all(jtok, dtcg)
+            missing = [k for k in base if k not in jtok]
+            extra = [k for k in jtok if k not in base]
+
+            _same = same_value
+
+            comparable, unresolved = [], []
+            for k in base:
+                if k not in jtok:
+                    continue
+                a, b = base_r[k], jtok_r[k]
+                (unresolved if (_unresolved(a) or _unresolved(b)) and not _same(a, b)
+                 else comparable).append((k, a, b))
+            diff = [(k, a, b) for k, a, b in comparable if not _same(a, b)]
+            if unresolved:
+                rep.warn(f"{len(unresolved)} composite token(s) could not be fully "
+                         f"resolved for comparison (e.g. {unresolved[0][0]}) — verify "
+                         f"these by hand or emit resolved literals in the generated file")
+            if missing:
+                rep.fail(f"{len(missing)} token(s) in CSS but absent from JSON: {missing[:5]}")
+            if extra:
+                rep.warn(f"{len(extra)} token(s) in JSON with no CSS counterpart: {extra[:5]}")
+            if diff:
+                rep.fail(f"{len(diff)} value mismatch(es), e.g. "
+                         + "; ".join(f"{k}: css={a!r} json={b!r}" for k, a, b in diff[:3]))
+            if not (missing or diff):
+                rep.ok(f"all {len(comparable)} comparable tokens agree between CSS and JSON "
+                       f"({coverage:.0%} of the CSS set matched)")
+
+
+def _check_markup(d: str, css_path: str, css: str, tok: TokenCSS, rep: Report) -> None:
     # 3. var() references resolve, across CSS and any HTML in the directory.
     defined = tok.defined()
     sources = [(os.path.basename(css_path), css)]
@@ -1140,6 +1345,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     t.add_argument("--css")
     t.add_argument("--json")
     t.set_defaults(fn=cmd_tokens)
+
+    e = sub.add_parser("export", help="generate tokens.json (DTCG 2025.10) from tokens.css")
+    e.add_argument("src", help="brand directory or path to tokens.css")
+    e.add_argument("-o", "--output", help="output path (default: tokens.json beside the CSS)")
+    e.set_defaults(fn=cmd_export)
 
     f = sub.add_parser("fonts", help="glyph coverage, OpenType features, axes, licence")
     f.add_argument("font")
