@@ -24,6 +24,7 @@ import argparse
 import json
 import math
 import os
+import pathlib
 import re
 import sys
 from typing import Dict, List, Optional, Tuple
@@ -282,29 +283,33 @@ def _describe(cell: str, value: str) -> str:
     return f"{cell} ({value})" if _is_ref(cell) else cell
 
 
-def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
-    rep.section(f"CONTRAST · {args.pairs}")
-    if not os.path.exists(args.pairs):
-        rep.fail(f"pairs file not found: {args.pairs}")
-        return
-    tokens = getattr(args, "tokens", None)
-    if not tokens:
-        beside = os.path.join(os.path.dirname(args.pairs) or ".", "tokens.css")
-        tokens = beside if os.path.exists(beside) else None
-    elif not os.path.exists(tokens):
-        rep.fail(f"tokens file not found: {tokens}")
-        return
-    palette = _Palette(tokens)
+class PairRow:
+    __slots__ = ("label", "theme", "fg", "bg", "fv", "bv", "f", "b", "thr")
 
-    rows, seen = [], set()
-    for lineno, raw in enumerate(open(args.pairs, encoding="utf-8"), 1):
+    def __init__(self, label, theme, fg, bg, fv, bv, f, b, thr):
+        self.label, self.theme, self.fg, self.bg = label, theme, fg, bg
+        self.fv, self.bv, self.f, self.b, self.thr = fv, bv, f, b, thr
+
+
+def read_pairs(pairs_path: str, palette: "_Palette",
+               rep: Optional[Report] = None) -> List[PairRow]:
+    """Every declared pairing, resolved and composited, one row per theme.
+
+    A literal row (no token names) applies to both themes and has theme "".
+    Problems are reported to `rep` when given, and the row is skipped.
+    """
+    def fail(msg):
+        if rep:
+            rep.fail(msg)
+    rows: List[PairRow] = []
+    for lineno, raw in enumerate(open(pairs_path, encoding="utf-8"), 1):
         line = raw.rstrip("\n")
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         parts = line.split("\t")
         if len(parts) < 4:
-            rep.fail(f"line {lineno}: expected 4 or 5 tab-separated fields "
-                     f"(name, fg, bg, threshold[, theme]), got {len(parts)}")
+            fail(f"line {lineno}: expected 4 or 5 tab-separated fields "
+                 f"(name, fg, bg, threshold[, theme]), got {len(parts)}")
             continue
         name, fg, bg, thr_raw = (p.strip() for p in parts[:4])
         theme_raw = parts[4].strip().lower() if len(parts) > 4 and parts[4].strip() else ""
@@ -313,15 +318,17 @@ def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
             try:
                 thr = float(thr_raw)
             except ValueError:
-                rep.fail(f"line {lineno}: threshold {thr_raw!r} is not a number "
-                         f"or one of {', '.join(THRESHOLDS)}")
+                fail(f"line {lineno}: threshold {thr_raw!r} is not a number "
+                     f"or one of {', '.join(THRESHOLDS)}")
                 continue
-        uses_tokens = _is_ref(fg) or _is_ref(bg)
         if theme_raw and theme_raw not in ("light", "dark", "both"):
-            rep.fail(f"line {lineno}: theme {theme_raw!r} is not light, dark or both")
+            fail(f"line {lineno}: theme {theme_raw!r} is not light, dark or both")
             continue
-        themes = (THEMES if theme_raw in ("", "both") else (theme_raw,)) if uses_tokens \
-            else ("",)
+        uses_tokens = _is_ref(fg) or _is_ref(bg)
+        if uses_tokens:
+            themes = THEMES if theme_raw in ("", "both") else (theme_raw,)
+        else:
+            themes = (theme_raw,) if theme_raw in THEMES else ("",)
         for theme in themes:
             label = f"{name} ({theme})" if theme else name
             try:
@@ -329,18 +336,44 @@ def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
                 for cell, value in ((fg, fv), (bg, bv)):
                     if not _is_ref(cell) and palette.tok and not palette.ships(value):
                         raise ValueError(
-                            f"{cell} matches no token in {os.path.basename(tokens)}, so this "
-                            f"row verifies a colour the system does not ship (a stale copy?). "
-                            f"Name the token instead.")
+                            f"{cell} matches no token in {os.path.basename(palette.path)}, so "
+                            f"this row verifies a colour the system does not ship (a stale "
+                            f"copy?). Name the token instead.")
                 f, b = resolve_pair(fv, bv)
             except ValueError as exc:
-                rep.fail(f"line {lineno}: {label}: {exc}")
+                fail(f"line {lineno}: {label}: {exc}")
                 continue
-            note = (f" composited {to_hex(f)}" if parse_colour(fv)[3] < 1.0 else "")
-            key = (to_hex(f), to_hex(b), thr)
-            rows.append((label, _describe(fg, fv), _describe(bg, bv), contrast_of(f, b),
-                         thr, key in seen, note))
-            seen.add(key)
+            rows.append(PairRow(label, theme, fg, bg, fv, bv, f, b, thr))
+    return rows
+
+
+def _tokens_for(pairs_path: str, explicit: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
+    """(tokens path or None, error or None): explicit wins, else beside the pairs."""
+    if explicit:
+        return (explicit, None) if os.path.exists(explicit) else \
+            (None, f"tokens file not found: {explicit}")
+    beside = os.path.join(os.path.dirname(pairs_path) or ".", "tokens.css")
+    return (beside if os.path.exists(beside) else None), None
+
+
+def cmd_contrast(args: argparse.Namespace, rep: Report) -> None:
+    rep.section(f"CONTRAST · {args.pairs}")
+    if not os.path.exists(args.pairs):
+        rep.fail(f"pairs file not found: {args.pairs}")
+        return
+    tokens, err = _tokens_for(args.pairs, getattr(args, "tokens", None))
+    if err:
+        rep.fail(err)
+        return
+    palette = _Palette(tokens)
+    seen = set()
+    rows = []
+    for row in read_pairs(args.pairs, palette, rep):
+        note = f" composited {to_hex(row.f)}" if parse_colour(row.fv)[3] < 1.0 else ""
+        key = (to_hex(row.f), to_hex(row.b), row.thr)
+        rows.append((row.label, _describe(row.fg, row.fv), _describe(row.bg, row.bv),
+                     contrast_of(row.f, row.b), row.thr, key in seen, note))
+        seen.add(key)
 
     if not rows:
         if not rep.failures:
@@ -1097,8 +1130,13 @@ def cmd_fonts(args: argparse.Namespace, rep: Report) -> None:
         rep.fail(f"font not found: {args.font}")
         return
 
-    f = TTFont(args.font, fontNumber=0, lazy=True)
-    cmap = f.getBestCmap()
+    try:
+        f = TTFont(args.font, fontNumber=0, lazy=True)
+        cmap = f.getBestCmap()
+    except Exception as exc:                     # noqa: BLE001 - report, never crash
+        rep.fail(f"cannot read {args.font}: {exc} (WOFF2 needs brotli: "
+                 f"pip install 'fonttools[woff]')")
+        return
     rep.ok(f"{len(cmap)} mapped codepoints")
 
     feats = set()
@@ -1451,6 +1489,271 @@ def cmd_lexicon(args: argparse.Namespace, rep: Report) -> None:
                  f"prohibitions. Re-run with --show-suppressed to audit them.")
 
 
+# ───────────────────────────────────────────────────────────── render ──
+# The rendered layer. Iron Law 1 says an undeclared pairing is an unverified
+# pairing, and only a browser knows which pairings a page actually paints.
+# Needs Playwright and a Chromium build: pip install playwright &&
+# python -m playwright install chromium.
+#
+# Backgrounds are composited up the ancestor chain to the first opaque ground
+# (the canvas is white). Text painted over an absolutely positioned sibling,
+# or over a background image, is outside that model: images are reported as
+# unverifiable rather than guessed at.
+
+_RENDER_JS = r"""
+(() => {
+  const cvs = document.createElement('canvas'); cvs.width = cvs.height = 1;
+  const ctx = cvs.getContext('2d', {willReadFrequently: true});
+  const parse = (css) => {
+    const m = /^rgba?\(([^)]*)\)$/.exec((css || '').trim());
+    if (m) { const p = m[1].split(/[\s,\/]+/).filter(Boolean).map(parseFloat);
+             return [p[0], p[1], p[2], p.length > 3 ? p[3] : 1]; }
+    if (!css || css === 'transparent') return [0, 0, 0, 0];
+    ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = css; ctx.fillRect(0, 0, 1, 1);
+    const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255];
+  };
+  const over = (t, u) => {
+    const a = t[3] + u[3] * (1 - t[3]); if (a === 0) return [0, 0, 0, 0];
+    return [0, 1, 2].map(i => (t[i] * t[3] + u[i] * u[3] * (1 - t[3])) / a).concat([a]);
+  };
+  const describe = (el) => {
+    let d = el.tagName.toLowerCase();
+    if (el.id) d += '#' + el.id;
+    const c = (el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean).slice(0, 2);
+    if (c.length) d += '.' + c.join('.');
+    return d;
+  };
+  const ground = (el) => {
+    const layers = []; let image = null;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none' && !image) image = describe(n);
+      const c = parse(cs.backgroundColor);
+      if (c[3] > 0) { layers.push(c); if (c[3] >= 1) break; }
+    }
+    let acc = [255, 255, 255, 1];
+    for (let i = layers.length - 1; i >= 0; i--) acc = over(layers[i], acc);
+    return {bg: acc, image};
+  };
+  const opacity = (el) => { let o = 1;
+    for (let n = el; n && n.nodeType === 1; n = n.parentElement) o *= parseFloat(getComputedStyle(n).opacity);
+    return o; };
+  const visible = (el) => { const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+    return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.display !== 'none'; };
+  const item = (el, kind, fgCss, text, groundEl) => {
+    const cs = getComputedStyle(el), g = ground(groundEl || el), ex = el.closest('[data-contrast-exempt]');
+    const fg = parse(fgCss); fg[3] *= opacity(el);
+    return {kind, where: describe(el), text: (text || '').trim().replace(/\s+/g, ' ').slice(0, 40),
+            fg, bg: g.bg, image: g.image, size: parseFloat(cs.fontSize),
+            weight: parseInt(cs.fontWeight, 10) || 400,
+            exempt: ex ? (ex.getAttribute('data-contrast-exempt') || '') : null,
+            disabled: !!el.closest(':disabled,[aria-disabled="true"]')};
+  };
+  window.__bc = {
+    describe, ground, parse,
+    pairs() {
+      const out = [], seen = new Set();
+      const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (w.nextNode()) {
+        const t = w.currentNode, el = t.parentElement;
+        if (!t.nodeValue.trim() || !el || seen.has(el)) continue;
+        seen.add(el);
+        if (el.closest('script,style,noscript,template') || !visible(el) || opacity(el) === 0) continue;
+        out.push(item(el, 'text', getComputedStyle(el).color, t.nodeValue));
+      }
+      const fields = 'input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=submit]):not([type=button]),select,textarea';
+      document.querySelectorAll(fields).forEach(el => {
+        if (!visible(el)) return;
+        const cs = getComputedStyle(el);
+        if (el.value) out.push(item(el, 'text', cs.color, el.value));
+        else if (el.placeholder) out.push(item(el, 'text', getComputedStyle(el, '::placeholder').color, el.placeholder));
+        if (cs.borderTopStyle !== 'none' && parseFloat(cs.borderTopWidth) > 0)
+          out.push(item(el, 'ui', cs.borderTopColor, '(control border)', el.parentElement));
+      });
+      return out;
+    },
+    focused() {
+      const el = document.activeElement;
+      if (!el || el === document.body || el === document.documentElement) return null;
+      const cs = getComputedStyle(el);
+      const outline = cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0;
+      return {where: describe(el), text: (el.innerText || el.value || '').trim().slice(0, 30),
+              outline: outline ? parse(cs.outlineColor) : null, shadow: cs.boxShadow !== 'none',
+              bg: ground(el.parentElement || el).bg, key: describe(el) + '|' + (el.innerText || el.value || '').slice(0, 30)};
+    },
+    overflow() { return document.documentElement.scrollWidth - document.documentElement.clientWidth; },
+    motion() {
+      const out = [];
+      for (const el of document.querySelectorAll('*')) {
+        const cs = getComputedStyle(el);
+        if (cs.animationName === 'none') continue;
+        const secs = cs.animationDuration.split(',').map(v => v.trim().endsWith('ms') ? parseFloat(v) / 1000 : parseFloat(v));
+        if (Math.max(...secs) > 0.01) out.push(describe(el));
+      }
+      return out;
+    },
+  };
+})();
+"""
+
+_STILL = "*,*::before,*::after{transition:none!important;animation:none!important}"
+
+
+def _near(a: RGBA, b: RGBA, tol: float = 2.5) -> bool:
+    return all(abs(x - y) <= tol for x, y in zip(a[:3], b[:3]))
+
+
+def playwright_ready() -> Optional[str]:
+    """None when a browser can launch, else the reason it cannot."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return "Playwright is not installed (pip install playwright)"
+    try:
+        with sync_playwright() as pw:
+            pw.chromium.launch().close()
+    except Exception as exc:                     # noqa: BLE001 - report, never crash
+        return f"no launchable Chromium ({str(exc).splitlines()[0][:120]}); run: " \
+               f"python -m playwright install chromium"
+    return None
+
+
+def cmd_render(args: argparse.Namespace, rep: Report) -> None:
+    html = args.html
+    rep.section(f"RENDER · {html}")
+    if not os.path.exists(html):
+        rep.fail(f"not found: {html}")
+        return
+    why = playwright_ready()
+    if why:
+        rep.fail(f"cannot run the rendered layer: {why}")
+        return
+    from playwright.sync_api import sync_playwright
+
+    pairs_path = args.pairs or os.path.join(os.path.dirname(html) or ".", "pairs.tsv")
+    tokens, err = _tokens_for(pairs_path, getattr(args, "tokens", None))
+    declared: Dict[str, List[Tuple[RGBA, RGBA]]] = {t: [] for t in THEMES}
+    if os.path.exists(pairs_path) and not err:
+        for row in read_pairs(pairs_path, _Palette(tokens)):
+            for t in ((row.theme,) if row.theme else THEMES):
+                declared[t].append((row.f, row.b))
+    else:
+        rep.warn(f"no pairs file at {pairs_path}: every rendered pairing will read as undeclared")
+    widths = [int(w) for w in str(args.widths).split(",") if w.strip()]
+    url = pathlib.Path(html).resolve().as_uri()
+
+    undeclared: Dict[tuple, list] = {}
+    low: Dict[tuple, list] = {}
+    exempt, images, counts = set(), set(), {t: 0 for t in THEMES}
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch()
+
+        def open_page(theme, width, reduce="no-preference", still=True):
+            ctx = browser.new_context(viewport={"width": width, "height": 900},
+                                      color_scheme=theme, reduced_motion=reduce)
+            # Offline, as a reviewer on a locked-down network sees it.
+            ctx.route("**/*", lambda r: r.continue_()
+                      if r.request.url.startswith(("file:", "data:")) else r.abort())
+            page = ctx.new_page()
+            page.goto(url)
+            if still:
+                page.add_style_tag(content=_STILL)
+            page.evaluate("t => document.documentElement.setAttribute('data-theme', t)", theme)
+            page.evaluate(_RENDER_JS)
+            return ctx, page
+
+        for theme in THEMES:
+            for width in widths:
+                ctx, page = open_page(theme, width)
+                spill = page.evaluate("() => window.__bc.overflow()")
+                if spill > 0:
+                    rep.fail(f"{theme} {width}px: horizontal overflow, the page is {spill}px "
+                             f"wider than the viewport")
+                for it in page.evaluate("() => window.__bc.pairs()"):
+                    if it["disabled"]:
+                        continue
+                    if it["exempt"] is not None:
+                        exempt.add((it["where"], it["exempt"] or "(no reason given)"))
+                        continue
+                    if it["image"]:
+                        images.add((theme, it["where"], it["image"]))
+                    f = composite(tuple(it["fg"]), tuple(it["bg"]))
+                    b = tuple(it["bg"])
+                    counts[theme] += 1
+                    r = contrast_of(f, b)
+                    if it["kind"] == "ui":
+                        thr = 3.0
+                    else:
+                        large = it["size"] >= 24 or (it["size"] >= 18.66 and it["weight"] >= 700)
+                        thr = 3.0 if large else 4.5
+                    key = (theme, to_hex(f), to_hex(b))
+                    if r < thr:
+                        low.setdefault(key + (thr,), []).append(it)
+                    if not any(_near(f, df) and _near(b, db) for df, db in declared[theme]):
+                        undeclared.setdefault(key, []).append(it)
+                ctx.close()
+
+            # Focus: walk the tab order once per theme at the widest width.
+            ctx, page = open_page(theme, max(widths))
+            first = None
+            for _ in range(60):
+                page.keyboard.press("Tab")
+                fx = page.evaluate("() => window.__bc.focused()")
+                if not fx or fx["key"] == first:
+                    break
+                first = first or fx["key"]
+                if not fx["outline"] and not fx["shadow"]:
+                    rep.fail(f"{theme}: no visible focus indicator on {fx['where']} "
+                             f"\"{fx['text']}\" (outline none, no box-shadow)")
+                    continue
+                if fx["outline"]:
+                    ring, g = composite(tuple(fx["outline"]), tuple(fx["bg"])), tuple(fx["bg"])
+                    r = contrast_of(ring, g)
+                    if r < 3.0:
+                        rep.fail(f"{theme}: focus ring on {fx['where']} is {fmt_ratio(r)}:1 "
+                                 f"against its ground, needs 3.0:1")
+                    if not any(_near(ring, df) and _near(g, db) for df, db in declared[theme]):
+                        undeclared.setdefault((theme, to_hex(ring), to_hex(g)), []).append(
+                            {"where": fx["where"], "text": "(focus ring)", "kind": "ui"})
+            ctx.close()
+
+        ctx, page = open_page("light", max(widths), reduce="reduce", still=False)
+        moving = page.evaluate("() => window.__bc.motion()")
+        if moving:
+            rep.fail(f"animation survives reduced motion on {len(moving)} element(s): "
+                     f"{sorted(set(moving))[:4]}. The reduced state must be the finished state.")
+        else:
+            rep.ok("reduced motion: no animation survives prefers-reduced-motion: reduce")
+        ctx.close()
+        browser.close()
+
+    def unique(items):
+        return list({(i["where"], i["text"]): i for i in items}.values())
+
+    for (theme, fh, bh, thr), items in sorted(low.items()):
+        items = unique(items)
+        it = items[0]
+        r = contrast_of(parse_colour(fh), parse_colour(bh))
+        rep.fail(f"{theme}: {it['where']} \"{it['text']}\" renders {fh} on {bh} at "
+                 f"{fmt_ratio(r)}:1, needs {thr}:1" + (f" ({len(items)} elements)" if len(items) > 1 else ""))
+    for (theme, fh, bh), items in sorted(undeclared.items()):
+        items = unique(items)
+        it = items[0]
+        r = contrast_of(parse_colour(fh), parse_colour(bh))
+        rep.fail(f"{theme}: undeclared pairing {fh} on {bh} ({fmt_ratio(r)}:1), "
+                 f"{len(items)} element(s), e.g. {it['where']} \"{it['text']}\". "
+                 f"Declare it in pairs.tsv by token name, or change the element.")
+    for theme, where, img in sorted(images):
+        rep.warn(f"{theme}: {where} sits on a background image ({img}); its contrast "
+                 f"cannot be computed from colours. Check it by eye and document how.")
+    for where, reason in sorted(exempt):
+        rep.note(f"exempt from contrast: {where} ({reason})")
+    for theme in THEMES:
+        if not any(k[0] == theme for k in list(low) + list(undeclared)):
+            rep.ok(f"{theme}: {counts[theme]} rendered pairing(s) at {widths}px, "
+                   f"all declared and meeting their threshold")
+
+
 # ──────────────────────────────────────────────────────────────── all ──
 
 def cmd_all(args: argparse.Namespace, rep: Report) -> None:
@@ -1469,6 +1772,32 @@ def cmd_all(args: argparse.Namespace, rep: Report) -> None:
                  f"--pairs PATH.")
     cmd_lexicon(argparse.Namespace(dir=d, strict=args.strict, claims=args.claims,
                                    show_suppressed=args.show_suppressed), rep)
+
+    # Fonts the system ships are checked against the licence that ships with them.
+    fonts_dir = os.path.join(d, "fonts")
+    if os.path.isdir(fonts_dir):
+        faces = sorted(f for f in os.listdir(fonts_dir)
+                       if f.lower().endswith((".ttf", ".otf", ".woff", ".woff2")))
+        licence = next((os.path.join(fonts_dir, n) for n in
+                        ("OFL.txt", "LICENSE.txt", "LICENSE", "OFL.md", "LICENSE.md")
+                        if os.path.exists(os.path.join(fonts_dir, n))),
+                       os.path.join(fonts_dir, "OFL.txt"))
+        for face in faces:
+            cmd_fonts(argparse.Namespace(font=os.path.join(fonts_dir, face),
+                                         glyphs=args.glyphs, licence=licence), rep)
+
+    tile = os.path.join(d, "style-tile.html")
+    if os.path.exists(tile):
+        why = playwright_ready()
+        if why:
+            rep.section("RENDER")
+            rep.warn(f"the rendered layer did not run: {why}. Until it runs, no check "
+                     f"proves every painted pairing is declared (Iron Law 1).")
+        else:
+            css = os.path.join(d, "tokens.css")
+            cmd_render(argparse.Namespace(html=tile, pairs=pairs if os.path.exists(pairs) else None,
+                                          tokens=css if os.path.exists(css) else None,
+                                          widths=args.widths), rep)
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -1513,12 +1842,24 @@ def main(argv: Optional[List[str]] = None) -> int:
                                     f"point it at the brand's file to scan a site elsewhere")
     l.set_defaults(fn=cmd_lexicon)
 
+    r = sub.add_parser("render", help="render the style tile in a browser: every painted "
+                                      "pairing declared and passing, overflow, focus, motion")
+    r.add_argument("html", help="the style tile (or any self-contained page)")
+    r.add_argument("--pairs", help="pairings file (default: pairs.tsv beside the page)")
+    r.add_argument("--tokens", help="tokens.css (default: beside the pairs file)")
+    r.add_argument("--widths", default="320,1440",
+                   help="viewport widths in CSS px (default 320,1440; 320 is WCAG reflow)")
+    r.set_defaults(fn=cmd_render)
+
     a = sub.add_parser("all", help="tokens + contrast + lexicon over a brand directory")
     a.add_argument("dir")
     a.add_argument("--strict", action="store_true")
     a.add_argument("--show-suppressed", action="store_true")
     a.add_argument("--pairs", help="pairings file, if kept outside BRAND_DIR")
     a.add_argument("--claims", help=f"forbidden-claims file (default: BRAND_DIR/{CLAIMS_FILE})")
+    a.add_argument("--glyphs", help="characters the system relies on, checked in every font "
+                                    f"under BRAND_DIR/fonts (default {DEFAULT_GLYPHS})")
+    a.add_argument("--widths", default="320,1440", help="render widths (default 320,1440)")
     a.set_defaults(fn=cmd_all)
 
     p.add_argument("--version", action="version",

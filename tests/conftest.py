@@ -51,3 +51,20 @@ def write(tmp_path):
 def fixture_font(tmp_path_factory):
     from fontfactory import build_font
     return build_font(tmp_path_factory.mktemp("font") / "FixtureSans.ttf")
+
+
+_BROWSER = None
+
+
+def browser_available() -> bool:
+    """True when Playwright and a Chromium build it can launch are installed."""
+    global _BROWSER
+    if _BROWSER is None:
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                p.chromium.launch().close()
+            _BROWSER = True
+        except Exception:
+            _BROWSER = False
+    return _BROWSER
