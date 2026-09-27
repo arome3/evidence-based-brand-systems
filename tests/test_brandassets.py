@@ -161,3 +161,18 @@ def test_var_syntax_names_a_token_too(ba, tmp_path):
     (tmp_path / "tokens.css").write_text(":root { --b-ground: #07110f; --b-ink: #f0efe9; }\n")
     colours = ba.resolve_icon_colours(tmp_path / "tokens.css", "var(--b-ground)", "--b-ink")
     assert colours[:2] == ("#07110f", "#f0efe9")
+
+
+@browser
+def test_the_sheet_only_mentions_a_dark_variant_when_icon_svg_has_one(ba_run, tmp_path):
+    a = tmp_path / "assets"
+    a.mkdir()
+    (a / "mark.svg").write_text(MARK_SVG)
+    ba_run("icons", a / "mark.svg", "--out", a, "--name", "Brand", "--bg", "#07110f",
+           "--fg", "#f0efe9")
+    ba_run("sheet", a)
+    assert "dark variant" not in (a / "asset-sheet.html").read_text()
+    ba_run("icons", a / "mark.svg", "--out", a, "--name", "Brand", "--bg", "#07110f",
+           "--fg", "#f0efe9", "--dark-bg", "#f0efe9", "--dark-fg", "#07110f")
+    ba_run("sheet", a)
+    assert "dark variant" in (a / "asset-sheet.html").read_text()

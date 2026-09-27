@@ -464,6 +464,11 @@ def cmd_sheet(args, rep: bc.Report) -> None:
         return (f'<img src="{_data_uri(p)}" width="{px}" height="{px}" alt="{name} at {px}px"'
                 f"{extra}>") if p else f"<em>missing {name}</em>"
 
+    icon = have.get("icon.svg")
+    # Say so only when icon.svg really carries a dark-mode style.
+    dark_note = (" icon.svg follows the viewer's OS theme, not the ground behind it, so switch "
+                 "the OS theme to see its dark variant."
+                 if icon and "prefers-color-scheme" in icon.read_text(encoding="utf-8") else "")
     grounds = [("light ground", "#ffffff", "#111111"), ("dark ground", "#111111", "#f5f5f5")]
     rows = []
     for label, bg, fg in grounds:
@@ -500,9 +505,7 @@ def cmd_sheet(args, rep: bc.Report) -> None:
             "box-sizing:border-box}</style></head><body>"
             "<section><h1>Asset sheet</h1><p>Review by eye: does the mark still read at "
             "16px, on both grounds? Does the wordmark hold at its minimum size? Does any crop "
-            "cut the art? icon.svg follows the viewer's OS theme, not the ground behind it, "
-            "so switch the OS theme to see its dark variant. Specimen page, not a "
-            "deliverable.</p></section>"
+            "cut the art?" + dark_note + " Specimen page, not a deliverable.</p></section>"
             + "".join(rows) + crops + og + "</body></html>\n")
     (d / "asset-sheet.html").write_text(html, encoding="utf-8")
     rep.ok(f"wrote {d / 'asset-sheet.html'} — open it and review every row by eye")
