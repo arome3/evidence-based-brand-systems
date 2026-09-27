@@ -1643,6 +1643,8 @@ SCANNED = (".md", ".mdx", ".html", ".htm", ".txt", ".astro", ".tsx", ".jsx", ".v
            ".svelte", ".ts", ".js", ".mjs", ".cjs", ".json", ".yml", ".yaml")
 SKIPPED_DIRS = {".git", "node_modules", "__pycache__", "dist", "build", ".next", ".astro",
                 ".vercel", ".svelte-kit", "coverage"}
+# Third-party legal texts shipped beside fonts or code are not the brand's voice.
+LICENCE_FILES = re.compile(r"^(OFL|LICEN[CS]E|COPYING|NOTICE)([-._][\w.-]*)?(\.(txt|md))?$", re.I)
 
 
 def cmd_lexicon(args: argparse.Namespace, rep: Report) -> None:
@@ -1661,7 +1663,7 @@ def cmd_lexicon(args: argparse.Namespace, rep: Report) -> None:
         dirs[:] = [x for x in dirs if x not in SKIPPED_DIRS]
         for name in sorted(files):
             path = os.path.join(root, name)
-            if name.endswith(SCANNED) and not (
+            if name.endswith(SCANNED) and not LICENCE_FILES.match(name) and not (
                     claims_path and os.path.abspath(path) == os.path.abspath(claims_path)):
                 targets.append(path)
     if not targets:

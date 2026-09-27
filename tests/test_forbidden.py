@@ -159,3 +159,14 @@ def test_a_phrase_wrapped_across_lines_is_caught(run, write, tmp_path):
     write("index.md", "Reconciliation that is regulator\napproved from day one.\n")
     code, out = run("lexicon", tmp_path)
     assert code == 1
+
+
+def test_third_party_licence_files_are_not_brand_copy(run, write, tmp_path):
+    # A font's OFL.txt says "licensed under" and "partnership with"; it is a
+    # third-party legal text shipped beside the fonts, not the brand's voice.
+    write("forbidden-claims.txt", "re:\\blicen[cs]ed (by|under)\\b\tno licence held\n")
+    write("fonts/brand/OFL.txt", "This Font Software is licensed under the SIL Open Font License.\n")
+    write("fonts/brand/LICENSE.md", "Licensed under the Apache License.\n")
+    write("01.md", "Reconciliation for finance teams.\n")
+    code, out = run("lexicon", tmp_path)
+    assert code == 0, out
