@@ -7,11 +7,10 @@ Three layers, all required. Mechanical checks catch what a machine can see; the 
 ## Layer 1 — Mechanical
 
 ```bash
-python3 scripts/brandcheck.py all BRAND_DIR
-python3 scripts/brandcheck.py fonts FONT.ttf --glyphs "…" --licence OFL.txt
+python3 scripts/brandcheck.py all BRAND_DIR --glyphs "=≠?→✓"
 ```
 
-Exit code 0 or it does not ship. What it verifies:
+`all` runs every check below that applies, including the fonts in `BRAND_DIR/fonts/` against their licence and the rendered layer. Exit code 0 or it does not ship. What it verifies:
 
 | Check | Catches |
 |---|---|
@@ -22,7 +21,17 @@ Exit code 0 or it does not ship. What it verifies:
 | Every declared pairing computed, truncated not rounded | Inaccessible palettes signed off by a checker showing one decimal |
 | Headroom warning under 5% | A pair that passes today and breaks on the next colour nudge |
 | Font glyph coverage, `tnum`, axes, RFN | Tofu in production; silently non-tabular columns; illegal modification |
-| Banned lexicon and unreferenced proof claims | Hype language and fabricated credibility |
+| Banned lexicon and unreferenced proof claims, with the referent attached to the claim (same paragraph, list item, table row or cited footnote) | Hype language and fabricated credibility; a date elsewhere in the document clears nothing |
+| `forbidden-claims.txt` | A claim stage 1 ruled out, in any document or page (`--claims` for a site elsewhere). Cleared only by a quoted prohibition, an evidence label, or a denial directly before it |
+| Pasted token blocks in every HTML file | A style tile or share card whose copy of the tokens has drifted from `tokens.css` |
+| The generated pairing table in `04-brand-guidelines.md` | A ratio in the guidelines that no longer matches the tokens, or was typed |
+| PNG provenance records | A share card or icon rendered before its page, mark or colour token changed ("stale") |
+| `tokens.json` regenerated from `tokens.css` and compared | A JSON edited by hand ("edited by hand") or left behind a CSS change ("stale") |
+| `pairs.tsv` rows resolved by token name, per theme | A pairing that verifies a copied hex after the token moved; a surface the dark theme forgot |
+| Translucent colours composited over their ground | A white-at-40% label scored as opaque white |
+| `@font-face` sources embedded, inline and SVG paint colours tokenised | An artifact that quietly needs a CDN or a second file; colour that bypasses the tokens |
+| Asset set (`assets`) | Live text in a logo; wrong icon sizes; a translucent Apple icon; art outside the maskable safe zone or the avatar circle; a broken manifest; a share card that is not 1200x630 |
+| Rendered layer (`render`) | Every painted pairing, in both themes at 320 and 1440px (theme-locked panels judged by their own theme), declared and passing; the share card as it is; horizontal overflow; missing or faint focus rings; motion that survives reduced-motion. `all` fails if it cannot run |
 
 **Cannot be checked mechanically, so do not pretend otherwise:** whether the system is differentiated, whether it fits the strategy, whether it is any good.
 
@@ -30,7 +39,11 @@ Exit code 0 or it does not ship. What it verifies:
 
 ## Layer 2 — Rendered
 
-Open the artifact. Every item is a thing to *do*, not to reason about.
+`brandcheck render` (part of `all`) mechanises most of this layer. It opens the style tile offline in Chromium, in both themes at 320px (the WCAG reflow width) and 1440px, and fails any painted text, placeholder or field-border colour that is undeclared in `pairs.tsv` or below its threshold, any horizontal overflow, any focus state with no indicator or a ring under 3:1, and any animation that survives reduced-motion. It also checks the borders of transparent (ghost) buttons, and reads the page's visible text against the forbidden claims, so copy set by script is gated too. Its model composites backgrounds up the ancestor chain. Text over a background image is reported as unverifiable. Text over an absolutely positioned sibling, inline SVG icon colours, hover and pressed states, and native checkboxes and radios are **not** checked; they stay in the manual list below.
+
+It renders any served page too: `brandcheck render http://localhost:3000/ --pairs BRAND_DIR/pairs.tsv` loads only from that origin, so a landing page is held to the same pairings as the tile.
+
+What remains for a person: greyscale, 200% zoom, whether the focus order makes sense, text over overlays and images, icon and hover-state colours, the offline render actually looking right, and legibility of the assets on `asset-sheet.html`. Open the artifact. Every item is a thing to *do*, not to reason about.
 
 - [ ] **Desktop and mobile widths.** Confirm zero horizontal overflow on the page body; wide content scrolls inside its own container.
 - [ ] **Both themes**, via the control and via the system preference, in both directions.
@@ -106,6 +119,10 @@ Append the completed checklist to the design-system document. **Mark it honestly
 - [ ] Every recommended font has a verified open licence and a direct source link
 - [ ] Token formats agree value-for-value, mechanically checked
 - [ ] Every device named in the guidelines is implemented in the artifact
+- [ ] `tokens.json` generated by `brandcheck export`; `pairs.tsv` names tokens
+- [ ] `brandcheck render` ran (not skipped with a warning) and passed
+- [ ] Asset set built with `brandassets` and passing `brandcheck assets`; mark legible at 16px on both grounds, checked on the sheet
+- [ ] Every claim ruled out at stage 1 is in `forbidden-claims.txt`, and quoted wherever a guideline lists it
 - [ ] Specimen content visibly labelled as illustrative
 - [ ] A stranger can explain what the company does from the artifact
 - [ ] The system can be handed to a contract developer without unresolved questions

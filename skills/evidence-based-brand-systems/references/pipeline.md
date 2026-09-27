@@ -18,7 +18,9 @@ Produce a fact base with a row per claim the brand will make, each carrying its 
 | Certifications actually held | Decides whether a badge row exists |
 | Funding, publicly announced | Decides whether an investor line exists |
 | Metrics you can evidence | Decides whether numbers appear |
-| Claims forbidden at this stage | Becomes the prohibited-applications list |
+| Claims forbidden at this stage | Becomes the prohibited-applications list, and `forbidden-claims.txt` |
+
+**Write `forbidden-claims.txt` now**, from that last row and from anything the owner's documents rule out: one claim per line, a TAB, then the reason (`templates/forbidden-claims.txt`). A plain phrase matches however it is spaced or hyphenated; a line starting `re:` is a regular expression. List the rewordings too ("approved by regulators" needs its own `re:` line). `brandcheck lexicon` and `all` fail any hit in any document or page, whatever `--strict` says. Matching runs on each paragraph, list item or table row with markup stripped, so `<em>bank</em>-grade` and a phrase wrapped across lines are still caught. Three things clear a hit, only within its own sentence, and nothing else: the phrase quoted after a prohibition (`Never write "bank-grade"`), the phrase quoted with an evidence label marking someone else's copy (`Acme: "bank-grade" [OBSERVED 2026-09-01]`), and a plain denial directly before it (`not yet regulator-approved`, the stage honesty the brand should state; `not just bank-grade` is an affirmation and fails). Quotation marks alone clear nothing; a prohibition word after the phrase clears nothing; an unquoted label, `[Assumption]` included, clears nothing. Point `--claims` at the file to gate a landing page kept elsewhere.
 
 **Anything the brand needs that no document answers becomes an open question for the owner.** Never resolve an unknown by inventing something plausible. A flagged gap is a deliverable; a filled gap is a fabrication.
 
@@ -112,19 +114,18 @@ Detail: `visual-system.md`.
 
 Before leaving this stage, list every device named in stage 4 and point at where it is implemented. Anything unimplemented is either built now or struck from the specification.
 
-- Tokens: one authored format, every other generated and mechanically diffed. See `tokens-and-type.md`.
-- Style tile: self-contained, no build step, no image assets, both themes, visible focus, reduced-motion respected, every specified device rendered, all specimen content visibly labelled.
+- **Tokens:** author `tokens.css`, then generate `tokens.json` with `python3 scripts/brandcheck.py export BRAND_DIR`. Re-export after every edit; never type the JSON. The dark block remaps every semantic colour token, not just the page ground. See `tokens-and-type.md`.
+- **Pairs:** every row of `pairs.tsv` names its tokens (`--b-color-text-primary`), so it is resolved fresh on every run, in both themes unless a fifth column says `light` or `dark`. Every surface a colour can sit on gets its own row.
+- **Style tile:** self-contained (fonts embedded as `data:` URIs), no build step, no image files, both themes, visible focus, reduced-motion respected, every specified device rendered, all specimen content visibly labelled. The wordmark and mark appear as inline SVG coloured by CSS classes that read tokens. Mark a logotype or decorative element `data-contrast-exempt="reason"`.
+- **Assets:** the wordmark, mark, icon set, avatar and share card, built with `scripts/brandassets.py`, icon colours given as token names. See `assets.md`.
+- **Scripts and fonts:** copy `brandcheck.py` and `brandassets.py` into `BRAND_DIR/scripts/`, and put each family in `BRAND_DIR/fonts/<family>/` with its own licence file; every face is checked against the licence beside it.
+- **Guidelines pairing table:** put the `<!-- brandcheck:pairs:start -->` / `<!-- brandcheck:pairs:end -->` markers in `04-brand-guidelines.md` and fill them with `brandcheck contrast pairs.tsv --update 04-brand-guidelines.md`. A ratio typed into the guidelines goes stale on the next token edit; `all` fails a stale table.
 
 ---
 
-## 6. VERIFY — mechanical, then adversarial, then rendered
+## 6. VERIFY — mechanical, then rendered, then adversarial
 
-```bash
-python3 scripts/brandcheck.py all BRAND_DIR
-python3 scripts/brandcheck.py fonts FONT.ttf --glyphs "…" --licence OFL.txt
-```
-
-Then the rendered checks — actually open it: desktop and mobile widths, both themes, keyboard focus, reduced motion, and with the webfonts blocked. Then the adversarial review.
+Run the stage 6 sequence in SKILL.md's Verify section exactly: `export`, `contrast --update`, `sheet`, then `all` (with `--strict` for a company with no public proof). `all` includes the rendered layer and the asset checks, and fails if it could not render. Then do what no command can: review `asset-sheet.html` by eye, work through the manual items in `verification.md` Layer 2, and run the adversarial review.
 
 Full protocol: `verification.md`.
 
@@ -133,5 +134,7 @@ Full protocol: `verification.md`.
 ## 7. GOVERN — make it usable by people who were not here
 
 Application rules, co-branding posture, trademark handling, brand architecture, localisation, and the handoff. A system a contract developer cannot implement without asking questions is not finished.
+
+The handoff includes the gates. Every page built from the system, the landing page first, runs the brand's forbidden claims and rendered check: `brandcheck lexicon SITE_DIR --claims BRAND_DIR/forbidden-claims.txt --strict` and `brandcheck render <served URL> --pairs BRAND_DIR/pairs.tsv`.
 
 Detail: `governance.md`.

@@ -1,5 +1,10 @@
 # Every foreground/background pairing the system ships.
-# name<TAB>foreground<TAB>background<TAB>threshold
+# name<TAB>foreground<TAB>background<TAB>threshold[<TAB>theme]
+#
+# Name TOKENS, never copy their values: a copied hex keeps passing after the
+# token changes. A row naming tokens is resolved against tokens.css on every
+# run, in both themes unless the fifth column says light or dark. A literal
+# colour that matches no token fails as a stale copy.
 #
 # threshold: 4.5 | 3.0 | normal | large | ui | aaa
 #   normal = 4.5:1 body text
@@ -7,22 +12,19 @@
 #   ui     = 3.0:1 interactive component boundaries and focus indicators
 #
 # Verify:  python3 scripts/brandcheck.py contrast pairs.tsv
+#          python3 scripts/brandcheck.py render style-tile.html   (what the page actually paints)
 # Ratios are truncated, never rounded up — 4.499:1 does not meet 4.5:1.
 #
 # Every surface an element can sit on needs its own row: a border that passes
 # on the page ground can fail on a sunken well. Adjacent colour is what counts.
 #
-# ---------- LIGHT ----------
-L01 body text on page	#000000	#ffffff	normal
-L02 body text on surface	#000000	#ffffff	normal
-L03 secondary text on page	#000000	#ffffff	normal
-L04 link on page	#000000	#ffffff	normal
-L05 button label on accent fill	#ffffff	#000000	normal
-L06 focus ring vs page	#000000	#ffffff	ui
-L07 control border vs page	#000000	#ffffff	ui
-L08 control border vs surface	#000000	#ffffff	ui
-#
-# ---------- DARK ----------
-D01 body text on page	#ffffff	#000000	normal
-D02 focus ring vs page	#ffffff	#000000	ui
-D03 control border vs page	#ffffff	#000000	ui
+body text on page	--b-color-text-primary	--b-color-bg-page	normal
+body text on surface	--b-color-text-primary	--b-color-bg-surface	normal
+meta text on page	--b-color-text-meta	--b-color-bg-page	normal
+meta text on surface	--b-color-text-meta	--b-color-bg-surface	normal
+accent text on page	--b-color-accent	--b-color-bg-page	normal
+label on accent fill	--b-color-text-on-accent	--b-color-accent	normal
+focus ring vs page	--b-color-focus-ring	--b-color-bg-page	ui
+focus ring vs surface	--b-color-focus-ring	--b-color-bg-surface	ui
+control border vs page	--b-color-border-control	--b-color-bg-page	ui
+control border vs surface	--b-color-border-control	--b-color-bg-surface	ui

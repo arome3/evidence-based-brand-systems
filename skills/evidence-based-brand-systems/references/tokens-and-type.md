@@ -50,11 +50,28 @@ Ship **both** mechanisms, or an explicit user choice cannot beat the system pref
 :root[data-theme="dark"] { /* … */ }
 ```
 
-The `:not([data-theme="light"])` guard is what lets an explicit light choice win over a dark OS preference. Set `color-scheme` in both blocks so native controls, scrollbars and form widgets follow. **The two blocks must define identical values** — `brandcheck tokens` verifies this, because a page that disagrees with itself about what dark means is a bug nobody finds until a user reports it.
+The `:not([data-theme="light"])` guard is what lets an explicit light choice win over a dark OS preference. For theme-locked panels (the style tile shows both themes at once), the attribute blocks must also match a subtree: write the light semantic block as `:root, [data-theme="light"]` and the dark one as `:root[data-theme="dark"], [data-theme="dark"]`, so a `<div data-theme="dark">` gets the dark values and a light panel inside a dark page gets the light ones back. `brandcheck render` judges each locked panel against its own theme's pairings. Set `color-scheme` in both blocks so native controls, scrollbars and form widgets follow. **The two blocks must define identical values** — `brandcheck tokens` verifies this, because a page that disagrees with itself about what dark means is a bug nobody finds until a user reports it.
 
 ## One authored format
 
 Pick one file as the source of truth. Generate every other format from it. Then **mechanically diff them** — this is the single highest-value check in the whole system, because token drift is invisible, cumulative, and always discovered at the worst moment.
+
+`tokens.css` is the authored file. Generate the JSON:
+
+```bash
+python3 scripts/brandcheck.py export BRAND_DIR      # writes BRAND_DIR/tokens.json
+```
+
+The export is DTCG 2025.10: colours as objects with an sRGB or OKLCH value, alpha and a hex fallback; `px`/`rem` dimensions and `ms`/`s` durations as `{value, unit}`; `cubicBezier`, `fontFamily`, `fontWeight` and `number` typed explicitly; `var()` aliases as `{a.b.c}` references. A token that is also a group (`--b-color-text` beside `--b-color-text-meta`) becomes that group's `$root` token, as 2025.10 requires. Values DTCG cannot type (`em` tracking, font-feature keywords), the dark theme and every media override travel in `$extensions`, so the export loses nothing. The file is stamped: `brandcheck tokens` regenerates it and reports a CSS change since the export as "stale" and a hand edit as "edited by hand".
+
+**Pairings name tokens too.** A `pairs.tsv` row that copies a hex out of the token file verifies the copy, and keeps passing after the token changes. Name the tokens and the row is resolved fresh on every run, in each theme:
+
+```
+body text on page	--b-color-text-primary	--b-color-bg-page	normal
+meta on surface	--b-color-text-meta	--b-color-bg-surface	normal	dark
+```
+
+A literal colour in `pairs.tsv` that matches no token in either theme fails as a stale copy.
 
 `brandcheck tokens` resolves both `var(--x)` and DTCG `{a.b.c}` references on both sides before comparing, so an aliased token does not read as a false mismatch.
 

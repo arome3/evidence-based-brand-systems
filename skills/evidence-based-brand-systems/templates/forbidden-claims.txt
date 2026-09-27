@@ -1,0 +1,23 @@
+# Claims this company may not make at its current stage.
+#
+# One per line: the phrase, a TAB, the reason. A plain phrase matches however
+# it is spaced or hyphenated ("bank-grade" also catches "bank grade"). A line
+# starting re: is a regular expression. Blank lines and # comments are ignored.
+#
+# Written at pipeline stage 1 from "Claims forbidden at this stage" and from
+# anything the owner's documents rule out. Enforced by:
+#   python3 scripts/brandcheck.py all BRAND_DIR
+#   python3 scripts/brandcheck.py lexicon SITE_DIR --claims BRAND_DIR/forbidden-claims.txt
+#
+# Matching runs per paragraph with markup stripped, so <em>bank</em>-grade and
+# wrapped lines are caught. Within its own sentence, three things clear a hit:
+#   the phrase quoted after a prohibition    Never write "bank-grade".
+#   quoted, with an evidence label           Acme: "bank-grade" [OBSERVED 2026-09-01]
+#   a plain denial directly before it        We are not yet regulator-approved.
+# Nothing else does: not quotation alone (Our "bank-grade" controls is the
+# claim), not "not just bank-grade", not dates, not an unquoted [Assumption].
+# `brandcheck render` applies the same list to the rendered page's text.
+# List the rewordings as well: "approved by regulators" needs its own re: line.
+#
+# Replace the example below with this company's own list.
+# <phrase>	<reason: what would have to be true first, and as of when it is not>

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title><BRAND> share card</title>
+<style>
+/* The default share card, rendered to assets/og-default.png:
+     python3 scripts/brandassets.py png og-card.html --size 1200x630 -o assets/og-default.png
+   The same rules as the style tile: tokens only, fonts embedded, no image
+   files. brandcheck scans this page with the lexicon and forbidden-claims.txt,
+   because a share card is often the first thing anyone sees of the company. */
+@font-face { font-family: "<FAMILY>"; font-weight: 100 900;
+             src: url(data:font/woff2;base64,<BASE64>) format("woff2"); }
+
+:root { /* paste the core and semantic tokens from tokens.css (the card's theme) */ }
+
+html, body { margin: 0; }
+body {
+  width: 1200px; height: 630px; box-sizing: border-box; padding: 72px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  background: var(--b-color-bg-page); color: var(--b-color-text-primary);
+  font-family: var(--b-font-sans);
+}
+.wm { height: 48px; color: var(--b-color-text-primary); }
+.wm svg { height: 100%; width: auto; display: block; }
+h1 {
+  margin: 0; max-width: 20ch; font-size: 72px; line-height: 1.05;
+  font-weight: var(--b-text-display-weight); letter-spacing: var(--b-text-display-tracking);
+}
+.descriptor { margin: 0; font-family: var(--b-font-mono); font-size: 18px;
+              color: var(--b-color-text-meta); }
+</style>
+</head>
+<body>
+  <div class="wm"><!-- assets/wordmark.svg inline, <metadata> removed --></div>
+  <!-- Say plainly what the company does, in the approved voice. No number, logo,
+       badge or count the company has not earned: the card is a surface like any other. -->
+  <h1><!-- headline --></h1>
+  <p class="descriptor"><!-- domain · approved one-line description --></p>
+</body>
+</html>
