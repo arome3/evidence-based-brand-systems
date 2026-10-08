@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- A cut-down nappy.co search page (structure as served 2026-10): the navbar's
+     trending topics carry photo thumbnails with no link to a photo page; each
+     result links to /photo/<slug>%2B<id> and repeats its image in a lightbox. -->
+<html lang="en">
+<head><meta charset="utf-8"><meta property="og:url" content="https://nappy.co/search/phone"><title>phone | nappy</title></head>
+<body>
+<nav>
+  <a href="/search/hands"><li><img class="object-cover w-8 h-8 rounded-full" src="https://images.nappy.co/photo/TGMd-WtsrHgPnVv_b5ZmR.jpg?width=1260"> hands</li></a>
+  <a href="/search/pets"><li><img class="object-cover w-8 h-8 rounded-full" src="https://images.nappy.co/photo/_4vyngajzzVJLyK3eEZNP.jpg?width=1260"> pets</li></a>
+  <img src="https://nappy.co/images/logo.png" alt="nappy">
+</nav>
+<main>
+  <div x-data="{open:false}">
+    <a phx-value-title="Woman on a phone call" class="relative" href="/photo/woman-on-phone-call%2B77ZSlAKXxaOxfCbGms6UP" title="Woman on a phone call">
+      <img loading="lazy" class="object-cover w-full h-full" src="https://images.nappy.co/photo/77ZSlAKXxaOxfCbGms6UP.jpg?width=1260" alt="Woman on a phone call">
+    </a>
+    <a href="/login?redirect_path=%2Fphoto%2F77ZSlAKXxaOxfCbGms6UP"><i class="fa-heart"></i></a>
+    <div x-show="open"><img src="https://images.nappy.co/photo/77ZSlAKXxaOxfCbGms6UP.jpg?width=2400" alt="Woman on a phone call"></div>
+  </div>
+  <div x-data="{open:false}">
+    <a class="relative" title="Man &amp; his phone" href="/photo/man-and-his-phone%2BoKvr_lYyu4MjV-u8tnvwZ">
+      <img alt="Man &amp; his phone" src="https://images.nappy.co/photo/oKvr_lYyu4MjV-u8tnvwZ.jpg?width=1260" loading="lazy">
+    </a>
+  </div>
+  <div x-data="{open:false}">
+    <a class="relative" href='/photo/holding-up-a-phone%2B9DQCDQvC9LxZg6pd-QJY3' title="Holding up a phone">
+      <img loading="lazy" src="https://images.nappy.co/photo/9DQCDQvC9LxZg6pd-QJY3.png?width=1260" alt="Holding up a phone">
+    </a>
+  </div>
+</main>
+</body>
+</html>

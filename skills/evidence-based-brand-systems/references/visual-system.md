@@ -2,6 +2,8 @@
 
 Stage 4. Every decision here carries the five-line annotation from `pipeline.md`. This file is about making the decisions well.
 
+**The board the owner picked sets the register.** The guidance below describes options and their trade-offs, not one house style. A restrained, document-like system is right for some territories and wrong for others; where a rule here reads as an absolute about *look* (restraint, accent rationing, texture, motion, imagery), it applies only when the picked board is in that register. Rules about *truth* (contrast, labelled specimens, no invented proof) apply everywhere.
+
 ## Visual DNA — state it in nine lines
 
 Before specifying anything, write:
@@ -22,7 +24,7 @@ Strong systems usually reach one of these:
 - Colour is **structure** — grounds and rules define architecture; one accent marks action.
 - Colour is **expression** — the brand's emotional register. Legitimate, but then it cannot also carry status; you will need shape and type to do that.
 
-**Ration the accent.** In the strongest reference systems studied, the accent appears astonishingly rarely — in one case roughly three times on an entire page, only as a status marker. Accent *scarcity*, not accent absence, is what reads as rigour. A page where colour appears constantly cannot use colour to mean anything.
+**Decide how much colour the brand spends.** Two strong models: a *rationed* accent that appears a few times a page and always means something (rigour, status), or a *spent* colour used in big fields, plates and posters that becomes the brand's recognisable asset (energy, fame). Choose from the picked board; then hold it. Either way, a colour that carries meaning (status, record type) never doubles as decoration.
 
 **Map the competitive colour territory before choosing.** Categories saturate: security is red/blue/violet, fintech is blue/green, climate is green. Find what is unclaimed *in that category* rather than what is pleasant in isolation.
 
@@ -78,13 +80,11 @@ The line is: **does it carry information about what the surface is, and does it 
 
 A material grain that makes a ground read as a surface can be generated procedurally (an inline SVG `feTurbulence` data URI needs no image asset), painted behind content, and averaging to the base colour so no contrast pairing changes. That is material.
 
-Gradient fields, shader backgrounds, particle drift, blur bloom and ambient loops are atmosphere — they carry feeling instead of information, and on a page whose argument is evidence they actively contradict the pitch. One reference system's shader required a triple text-shadow glow to rescue legibility from it; that is the tell.
+Gradient fields, grain and soft colour washes are legitimate *when they mean something in this brand* (a sky that follows the time of day, a material, a mood the owner's references share) and every text pairing on them is computed. Shader backgrounds, particle drift and ambient loops that exist only to look "AI" are atmosphere: avoid them. The tell is legibility: if text needs a glow to survive the background, the background is wrong.
 
 ## Imagery
 
-Decide what the brand shows *instead of* the category's stock imagery. Specify allowed / discouraged / prohibited per category: evidence, source material, product, abstract graphics, photography, illustration, data visualisation.
-
-**Aim for zero required image assets in version one.** This is about imagery (photography, illustration, textures as files). The identity's own export set, the outlined wordmark, the mark and the icons in `assets/`, is required, and `assets.md` covers it. It keeps the system implementable by one person, keeps it fast, and forces the graphic language to do real work. If AI-generated imagery is ever used, **disclose it on the surface where it appears** — a rare convention, and the one most compatible with a brand claiming accuracy.
+Decided in stage 3, specified here: the mode, one treatment rule, and the sources (`imagery.md`). Specify allowed / discouraged / prohibited per category (photography, illustration, 3D, characters, product, data, evidence). The identity's own export set, the outlined wordmark, the mark and the icons in `assets/`, is built as in `assets.md`. If AI-generated imagery is ever used, disclose it on the surface where it appears.
 
 ## Data presentation
 
@@ -99,7 +99,17 @@ Decide what the brand shows *instead of* the category's stock imagery. Specify a
 Motion communicates state or causality. It does not exist to decorate.
 
 - Interaction band 140–300ms. Longer durations only for genuine content disclosure.
-- **No ambient motion.** Loops, drifts, marquees and self-running demos assert liveliness, which is activity presented as progress.
+- **Ambient motion is a choice, not a default.** Loops, drifts and marquees assert liveliness; use them only when the picked board's energy calls for it, keep them cheap on low-end devices, and give them a labelled stop control.
 - Disclosure should not reflow the page — fix the container height so the reader never loses their place.
 - Every animation has a reduced-motion **finished** state.
 - If any decorative motion survives, it must be stoppable by a labelled control.
+
+## Sound and voice (when the product speaks)
+
+For voice assistants, phone services and anything users hear, sound is a distinctive asset.
+
+- **Voice:** casting brief (accent, age, warmth, pace) matched to the audience; one voice per persona.
+- **Fixed phrases:** the greeting and the confirmation line, word for word, so they become recognisable.
+- **Sonic logo:** a 2–3 note motif under 1.5 seconds that survives a phone line (roughly 300–3,400 Hz), paired with one visual moment (the mark animating, a confirmation appearing).
+- **Show sound as words, not waves.** Captions of what was said beat waveforms and orbs, which are now generic category signifiers.
+- Where callers hear the client's customer's business name rather than the brand, the caller-facing sound belongs to that business; brand sound lives in the product, the site and marketing.

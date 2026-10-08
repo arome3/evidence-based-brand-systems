@@ -46,8 +46,10 @@ Scope note: what every claim below traces to.
   Competitors               per competitor: colour, type, hero, motifs, proof, voice
                             + what a visitor remembers + the whitespace they leave
   Craft benchmarks          METHODS ONLY. Explicitly out of scope: their look.
-  Taste references          per-site observations, all labelled
-                            [VERIFIED] / [OBSERVED] / [INTERPRETATION]
+  Taste references          per-reference observations from captures you LOOKED AT,
+                            all labelled [VERIFIED] / [OBSERVED] / [INTERPRETATION];
+                            what makes each feel made: imagery layer, mark, signature device
+  Distinctive assets        the shape, colour, character, sound or phrase the brand will own
   Shared qualities          2-4, each with per-site evidence
   Taste profile             a NAME · one-sentence definition · defining qualities ·
                             emotional register · colour · typography · composition ·
@@ -58,8 +60,11 @@ Scope note: what every claim below traces to.
                             Differences / Source / Licence
 
 ## Part II — Territories
-  Three territories, each with the full block (see pipeline.md)
-  Decision matrix           weighted scores, taste never outranking strategy
+  Three territories that differ in kind, each with the block in pipeline.md stage 3
+                            and a link to its board (boards/direction-X.html)
+  Owner's pick              the board chosen or the mix, in the owner's own words, dated
+  Rejection diagnoses       if any round was rejected: vs references · owner's words · rule at fault
+  Decision matrix           OPTIONAL record of trade-offs; states who scored it; never the decider
   Selected territory        written rationale · emotional impression · central metaphor ·
                             mood in words · verbal / visual / product implications
   Rejected territories      reasons, and which ideas are RETAINED inside the winner
@@ -71,7 +76,7 @@ Scope note: what every claim below traces to.
   Reference-independence    element by element
 ```
 
-Do not include mood boards or external images. The writing must be specific enough that an independent designer could build one.
+The boards are the visual record; this document is the reasoning behind them. Link each territory to its board instead of describing what the board already shows. The writing must still be specific enough that an independent designer could rebuild the picked direction.
 
 ---
 
@@ -99,7 +104,9 @@ Applied to: palette · typography · grid · spacing · graphic language · text
                        tracking | use
 ## Spacing and layout  base unit · scale · containers · grid · breakpoints ·
                        reading width · radius philosophy · shadow philosophy
-## Imagery             allowed / discouraged / prohibited. No image assets in v1.
+## Imagery             mode · one treatment rule · sources (SOURCES.tsv, stand-ins marked) ·
+                       allowed / discouraged / prohibited · shoot brief for stand-ins
+## Sound and voice     when the product speaks: voice casting, fixed phrases, sonic logo
 ## Graphic language    each device bound to a meaning, and what it may NOT express
 ## Iconography         style · stroke · grid · sizes · accessibility
 ## Motion              purpose · durations · easing · states · reduced-motion

@@ -9,30 +9,33 @@ description: Use when creating, overhauling, or auditing a brand identity, visua
 
 A brand system is a set of claims: about what a company is, how its surfaces look, how they behave, and how they may be used. **Every one of those claims is either verified or it is decoration.**
 
-Brand work fails in two directions, and they are not the same failure:
+Brand work fails in three directions, and they are not the same failure:
 
 1. **Asserting what nobody checked.** Contrast judged by eye. Fonts trusted from a specimen page. Research written from memory. A checklist ticked because it felt done.
 2. **Documenting a system nobody built.** Guidelines specify seven graphic devices; the artifact ships two. Tokens exist in three formats that disagree. The style tile renders nothing the strategy asked for.
+3. **Deciding the look before anyone has seen it.** Territories chosen in prose and a self-scored matrix; imagery ruled out by default; the owner's own references summarised instead of looked at. The first thing the owner sees arrives after every decision is locked, and it is rejected as plain.
 
-The first produces a system that breaks under review. The second produces a system that reads as plainer and weaker than it was designed to be — and it is the failure that makes brand work feel generic.
+The first produces a system that breaks under review. The second and third produce a system that reads as plainer and weaker than the company deserves, and they are the failures that make brand work feel generic.
 
-This skill closes both: a pipeline that grounds every decision in the project's own documents and in fetched evidence, and a verifier that mechanically checks what a machine can check.
+This skill closes all three: a pipeline that grounds every claim in the project's own documents and in fetched evidence, rendered boards the owner chooses from by eye before anything is specified, and a verifier that mechanically checks what a machine can check.
 
 ## The pipeline
 
-Copy this into your working notes and check items off. Do not skip stages — stage 4 is worthless without stage 2, and stage 6 is what makes any of it defensible.
+Copy this into your working notes and check items off. Do not skip stages: stage 3 is worthless without stage 2, stage 4 starts only after the owner has picked a board, and stage 6 is what makes any of it defensible.
 
 ```
 [ ] 1. GROUND    — the project's own documents; fact base; stage honesty; forbidden-claims.txt
-[ ] 2. RESEARCH  — category, competitors, craft benchmarks, references (all fetched)
-[ ] 3. DIRECT    — 3 distinct territories, scored matrix, one selected
-[ ] 4. SPECIFY   — visual system, every decision traced to strategy + territory
-[ ] 5. BUILD     — tokens (export JSON), pairs by token name, style tile, asset set
+[ ] 2. RESEARCH  — category, competitors, craft benchmarks, owner's references captured and LOOKED AT
+[ ] 3. EXPLORE   — 3 territories as rendered boards (mark lab, imagery, applications); owner picks or mixes by eye
+[ ] 4. SPECIFY   — visual system for the picked board, every decision traced to strategy + territory
+[ ] 5. BUILD     — tokens (export JSON), pairs by token name, style tile, asset set, guidelines deck
 [ ] 6. VERIFY    — brandcheck all passes (render + assets included); sheet reviewed; adversarial review passes
 [ ] 7. GOVERN    — application rules, co-branding, trademark, handoff
 ```
 
-Full protocol for each stage: `references/pipeline.md`.
+Full protocol for each stage: `references/pipeline.md`. Stage 3 in detail: `references/visual-exploration.md`; imagery: `references/imagery.md`.
+
+**Two gates, two judges.** What the brand *claims* (copy, numbers, proof, capabilities) answers to evidence: the fact base, `forbidden-claims.txt`, the lexicon. How the brand *looks* (imagery, colour, type, composition, energy) answers to the owner's eye, measured against the owner's own references. Neither gate overrules the other: evidence never vetoes a look the owner chose, and the owner's taste never licenses a claim the company cannot back.
 
 ## Iron Laws
 
@@ -45,9 +48,13 @@ Individually citable. Quote them by number in review.
 5. **Three labels, never blended.** *Verified* (read from the implementation), *observed* (seen rendered, not confirmed), *interpretation* (your judgement). Mixing them is how taste gets laundered into fact.
 6. **Invented proof never ships.** No customer logos, badges, counts, awards, testimonials, analyst marks, or screenshots-as-production the company has not earned. Not as placeholders. Not "for the pitch".
 7. **Stage honesty is strategy.** State plainly what proof does not yet exist. For a zero-customer company, the slot is *deleted*, not filled with something weaker.
-8. **Borrow the method, never the identity.** Reference brands are studied for how they build, not for how they look. Similarity in one principle is fine; similarity in the overall identity is theft and reads as such.
+8. **Borrow the method, never the identity.** Competitors and craft benchmarks are studied for how they build. The owner's taste references set the *standard* for the look (its qualities, energy and craft), never a template to copy. Similarity in one principle is fine; similarity in the overall identity is theft and reads as such.
 9. **Ship the checks with the system.** The verifier and the declared pairings are deliverables. A system nobody can re-verify decays on first edit.
 10. **A checklist item a reviewer can falsify does more damage than the defect it hides.**
+11. **Show, then specify.** The owner chooses a direction from rendered boards (real imagery, the mark, applications), never from prose or a matrix. No tokens, guidelines or style tile before a board is picked.
+12. **Look at every reference.** Each reference the owner gives is captured and viewed image by image by whoever designs. A summary, yours or a helper's, is not looking.
+13. **Imagery is decided, not defaulted.** Every system names its imagery mode, one treatment rule and its sources. "No imagery" is a decision you must justify, never the starting point.
+14. **Diagnose before you redo.** A rejection gets a written diagnosis against the owner's references before any new work. More devices on a weak idea is not bolder.
 
 ## What the deliverable IS
 
@@ -56,10 +63,13 @@ Not a prohibition list — a contract. The output is these files, and each has r
 | File | Must contain |
 |---|---|
 | `01-brand-identity.md` | Assumptions (at top) · purpose, promise, positioning · audience · what it is / is not · personality traits with failure modes · values with observable behaviour · voice with rewrite examples · naming, pronunciation, trademark status · taglines · approved descriptions |
-| `02-creative-direction.md` | All research with labels and dates · ≥3 distinct territories · scored decision matrix · selected territory + written rationale · rejected territories with reasons · competitor differentiation check · reference-independence check |
-| `03-visual-direction.md` | Every major decision annotated: **Decision / Strategy / Territory / Reference influence / Adaptation** · colour with usage + prohibited usage + pairing · type scale as quads · spacing, grid, imagery, iconography, motion |
+| `boards/` | Stage 3. One HTML file of six 16:9 slides per territory (cover, mark on grid, colour and type, imagery, applications, product), their PNG renders, and `compare.html` showing all three side by side. Real imagery, the real mark, every example labelled. Built from `templates/board.html`; passes `boardcheck` |
+| `02-creative-direction.md` | All research with labels and dates · the owner's references, each captured and looked at · ≥3 territories that differ in kind · the owner's pick (or mix) in their words · rejected territories and retained ideas · rejection diagnoses, if any · competitor differentiation check · reference-independence check. A scored matrix is optional and never the decider |
+| `03-visual-direction.md` | Every major decision annotated: **Decision / Strategy / Territory / Reference influence / Adaptation** · colour with usage + prohibited usage + pairing · type scale as quads · spacing, grid, iconography, motion · **imagery: mode, one treatment rule, sources** · sound and voice, when the product speaks |
 | `04-brand-guidelines.md` | Wordmark construction in reproducible units, taken from the wordmark's construction record · **every pairing with its computed ratio**, generated between `<!-- brandcheck:pairs:start -->` and `<!-- brandcheck:pairs:end -->` by `brandcheck contrast pairs.tsv --update 04-brand-guidelines.md` · voice in application (buttons, errors, empty states) · brand applications, each pointing at its file in `assets/` · co-branding · prohibited applications, with every forbidden phrase in quotation marks |
 | `05-design-system.md` | Foundations · every component with all states, keyboard, screen-reader, misuse · completed self-review checklist |
+| `guidelines-deck.html` | The owner-facing brand book: 16:9 slides in the board's style (strategy, voice, mark and construction, clear space, colour, type, imagery, devices, applications). Generated from the same tokens and assets; the markdown documents are its engineering appendix |
+| `SOURCES.tsv` | Every image used: file, source URL, licence, date, and whether it is a stand-in to be replaced |
 | `tokens.css` | Three layers: core → semantic → component. Themes by semantic remap only |
 | `tokens.json` | Generated by `brandcheck export`, never typed. The check regenerates it and compares |
 | `style-tile.html` | Self-contained (fonts embedded as `data:` URIs), no build, no image files, both themes, visible focus, reduced-motion, every specified device rendered, wordmark and mark as inline SVG |
@@ -68,7 +78,7 @@ Not a prohibition list — a contract. The output is these files, and each has r
 | `og-card.html` | The share card as a page: tokens, embedded fonts, inline wordmark, no unearned proof |
 | `assets/` | `wordmark.svg`, `mark.svg`, `icon.svg`, `favicon.ico`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `icon-mask.png`, `avatar.png`, `og-default.png`, `manifest.webmanifest`, `head-snippet.html`, built with `scripts/brandassets.py` |
 | `fonts/` | The WOFF2/TTF files the system uses, with their licence file beside them |
-| `scripts/` | Copies of `brandcheck.py` and `brandassets.py` at the version used (Iron Law 9) |
+| `scripts/` | Copies of `brandcheck.py`, `brandassets.py` and `boardcheck.py` at the version used (Iron Law 9) |
 
 Templates for all of these: `templates/`.
 
@@ -94,6 +104,12 @@ python3 scripts/brandcheck.py render http://localhost:3000/ --pairs BRAND_DIR/pa
 
 Add `--as-is` when the site ships one theme; without it the page is rendered in both.
 
+**Every board and deck slide** gets a layout check before anyone sees it, and you look at every rendered slide yourself:
+
+```bash
+python3 scripts/boardcheck.py BRAND_DIR/boards/direction-A.html   # text past its container, off-slide elements, collisions
+```
+
 Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it cannot judge — differentiation, strategic fit, whether the thing is any good — is the adversarial review in `references/verification.md`. Both are required.
 
 ## Rationalizations — every one means stop
@@ -115,6 +131,12 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 | "The logo is just the name in the brand font" | Live text renders in whatever font the viewer has. Outline it with `brandassets wordmark`, and build the rest of the set. |
 | "It's in quotation marks, so the checker lets it through" | Quotation clears a forbidden claim only inside a prohibition ("Never write..."). Our "bank-grade" controls is the claim. |
 | "The strategy documents don't say, so I'll use my judgement" | Unknowns are flagged as open decisions for the owner, never filled with something plausible. |
+| "I'll describe the three territories; the owner can imagine them" | Nobody can judge a brand from prose. Render the boards. |
+| "The matrix shows the winner clearly" | You designed the territories and scored them. The owner's eye decides; the matrix is a record. |
+| "No imagery keeps v1 simple and honest" | It also makes it look unfinished. Decide the imagery mode; free-licence stand-ins are honest when logged and labelled. |
+| "A helper already summarised the references" | A summary is not looking. Open the captures and look at every image. |
+| "They said it's too plain, so I'll add more devices" | Diagnose first against their references. Gimmicks on a weak idea read as worse, not bolder. |
+| "Evidence says restraint, so the accent stays rationed" | Restraint is one aesthetic. Claims answer to evidence; the look answers to the owner's references. |
 
 ## Red flags — stop and re-ground
 
@@ -131,13 +153,21 @@ Exit code 0 or it does not ship. `brandcheck` covers what is mechanical. What it
 - A forbidden phrase in a guideline without quotation marks around it, or in quotation marks anywhere that is not forbidding it
 - A hex value typed into `brandassets icons` instead of a token name
 - `--no-render`, or a run that did not render, reported as a pass
+- Tokens, guidelines or a style tile written before the owner has picked a board
+- A territory that exists only as text, or three territories that could swap palettes unnoticed
+- A description of a reference you have not looked at yourself
+- A board with no living layer: no people, character or crafted object anywhere
+- A mark that reads as a stock icon (receipt, chat bubble, handset, sparkle, tick-in-circle)
+- A board you have not rendered and looked at slide by slide
 
 ## Reference routing
 
 | Read | When |
 |---|---|
-| `references/pipeline.md` | Before starting. The full protocol for all seven stages, including how to research sites and label evidence, and how to develop and score territories |
-| `references/visual-system.md` | Stage 4. Colour, themes, typography, grid, plates, graphic language, texture, imagery, data, motion |
+| `references/pipeline.md` | Before starting. The full protocol for all seven stages, including how to research sites and label evidence |
+| `references/visual-exploration.md` | Stage 3. Boards, territories that differ in kind, the mark lab, signature devices, the AI-default check, presenting the choice, rejection diagnosis |
+| `references/imagery.md` | Stages 2–5. Imagery modes, one treatment rule, product-on-top-of-life, CC0 stand-ins and `SOURCES.tsv`, shoot brief, reference intake |
+| `references/visual-system.md` | Stage 4. Colour, themes, typography, grid, plates, graphic language, texture, data, motion, sound |
 | `references/accessibility.md` | Stages 4–6. Thresholds, exemptions, the anti-rounding rule, the formulas, the legal position |
 | `references/tokens-and-type.md` | Stage 5. Three-tier architecture, naming, theming, DTCG 2025.10 export, pairs by token, font verification and licensing |
 | `references/assets.md` | Stage 5. Wordmark, mark, icon set, avatar and share card: how to build them and what the checks enforce |

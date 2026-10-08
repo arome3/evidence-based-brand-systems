@@ -1,7 +1,7 @@
 {
   "name": "evidence-based-brand-systems",
-  "version": "1.2.0",
-  "description": "Produce complete, verifiable brand systems: identity, creative direction, guidelines, generated design tokens, a working style tile, and the logo, icon and share-card assets, with a verifier that checks contrast (as rendered), token drift, font reality, asset correctness and fabricated or forbidden claims.",
+  "version": "1.3.0",
+  "description": "Produce complete, verifiable brand systems: rendered direction boards the owner chooses from, identity, creative direction, imagery, guidelines, generated design tokens, a working style tile, and the logo, icon and share-card assets, with a verifier that checks contrast (as rendered), token drift, font reality, asset correctness and fabricated or forbidden claims.",
   "author": {
     "name": "Abraham Onoja"
   },

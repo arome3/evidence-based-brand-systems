@@ -59,9 +59,14 @@ The token, contrast, lexicon and asset checks are standard library. The rest nee
 | `brandcheck render` (and `all` when a style tile exists) | `playwright` plus Chromium |
 | `brandassets wordmark` | `fonttools`, `uharfbuzz` |
 | `brandassets icons`, `png`, `sheet` | `playwright` plus Chromium |
+| `boardcheck` | `playwright` plus Chromium |
+| `refcapture site` | `playwright` plus Chromium |
+| `refcapture project` | `playwright` plus Chromium, `pillow` |
+| `contactsheet`, `photosource search` | `pillow` |
+| `photosource get` | standard library |
 
 ```bash
-pip install 'fonttools[woff]' uharfbuzz playwright
+pip install 'fonttools[woff]' uharfbuzz playwright pillow
 python -m playwright install chromium
 ```
 
@@ -83,13 +88,15 @@ To invoke it explicitly:
 
 ## Why
 
-Brand work fails in two directions, and they are different failures.
+Brand work fails in three directions, and they are different failures.
 
 **Asserting what nobody checked.** Contrast judged by eye. Fonts trusted from a specimen page. Research written from memory. A checklist ticked because it felt done. This produces a system that breaks under review.
 
 **Documenting a system nobody built.** Guidelines specify seven graphic devices; the artifact ships two. Tokens live in three formats that disagree. This produces a system that reads as plainer and weaker than it was designed to be — and it is why so much brand work feels generic.
 
-This skill closes both.
+**Deciding the look before anyone has seen it.** Territories chosen in prose and a self-scored matrix, imagery ruled out by default, the owner's references summarised instead of looked at. The first visual arrives after everything is locked, and it is rejected as plain.
+
+This skill closes all three: claims answer to evidence, the look answers to the owner's eye, and the owner chooses from rendered boards before anything is specified.
 
 ---
 
@@ -97,8 +104,9 @@ This skill closes both.
 
 | File | Contents |
 |---|---|
+| `boards/` | Stage 3: three territories as six-slide 16:9 boards (cover, mark on grid, colour and type, imagery, applications, product) with real imagery, plus a side-by-side `compare.html`. The owner picks by eye |
 | `01-brand-identity.md` | Purpose, positioning, five personality traits with failure modes, values, voice with rewrite examples, naming and trademark status, taglines, approved descriptions |
-| `02-creative-direction.md` | All research with evidence labels, a named taste profile, three distinct creative territories, a scored decision matrix, reference-independence check |
+| `02-creative-direction.md` | All research with evidence labels, the owner's references captured and looked at, three territories that differ in kind, the owner's pick in their words, any rejection diagnosis, reference-independence check |
 | `03-visual-direction.md` | Every major decision annotated with strategy, territory and reference traceability |
 | `04-brand-guidelines.md` | Wordmark in reproducible units, **every colour pairing with its computed ratio**, voice in application, co-branding, prohibited applications |
 | `05-design-system.md` | Every component with all states, keyboard and screen-reader behaviour, misuse, and a completed self-review checklist |
@@ -108,6 +116,8 @@ This skill closes both.
 | `forbidden-claims.txt` | The claims this company may not make at its stage, enforced in every document and page |
 | `og-card.html` | The share card as a page, from the tokens, checked like any other surface |
 | `assets/` | Outlined wordmark, mark, `icon.svg`, `favicon.ico`, Apple, 192/512 and maskable icons, avatar, share card, manifest, head snippet |
+| `guidelines-deck.html` | The owner-facing brand book as 16:9 slides in the picked board's style; the markdown documents are its engineering appendix |
+| `SOURCES.tsv` | Every image with source, licence and date; stand-ins marked for replacement by a commissioned shoot |
 | `fonts/` · `scripts/` | The font files with their licence; copies of the checker and the builder |
 
 ---
@@ -172,6 +182,10 @@ The wordmark is shaped with HarfBuzz, so the font's kerning and features apply, 
 8. Borrow the method, never the identity.
 9. Ship the checks with the system.
 10. A checklist item a reviewer can falsify does more damage than the defect it hides.
+11. Show, then specify.
+12. Look at every reference.
+13. Imagery is decided, not defaulted.
+14. Diagnose before you redo.
 
 ---
 
@@ -184,6 +198,8 @@ skills/evidence-based-brand-systems/
   SKILL.md                    the pipeline, iron laws, deliverable contract
   references/
     pipeline.md               the seven stages in full
+    visual-exploration.md     boards, mark lab, signature device, AI-default check, rejection diagnosis
+    imagery.md                imagery modes, treatment, CC0 stand-ins, reference intake
     visual-system.md          colour, type, grid, graphic language, motion
     accessibility.md          thresholds, exemptions, formulas, legal position
     tokens-and-type.md        token architecture, DTCG 2025.10, font verification
@@ -193,6 +209,10 @@ skills/evidence-based-brand-systems/
   templates/                  scaffolds for every deliverable
   scripts/brandcheck.py       the verifier
   scripts/brandassets.py      the asset builder
+  scripts/refcapture.py       capture reference sites and gallery projects to look at
+  scripts/contactsheet.py     numbered contact sheets for fast review
+  scripts/photosource.py      CC0 stand-in photography with a licence log
+  scripts/boardcheck.py       text overflow, off-slide and collision check for boards and decks
 tests/                        pytest suite for both scripts
 ```
 
