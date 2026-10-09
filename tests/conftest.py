@@ -82,3 +82,34 @@ def browser_available() -> bool:
         except Exception:
             _BROWSER = False
     return _BROWSER
+
+
+# ── the v1.3 reference and board tools ──
+
+@pytest.fixture(scope="session")
+def cs():
+    return _load("contactsheet")
+
+
+@pytest.fixture(scope="session")
+def rc():
+    return _load("refcapture")
+
+
+@pytest.fixture(scope="session")
+def ps():
+    return _load("photosource")
+
+
+@pytest.fixture(scope="session")
+def bdc():
+    return _load("boardcheck")
+
+
+@pytest.fixture
+def cli(capsys):
+    """cli(module, *argv) runs a script's main in-process; returns (exit code, stdout)."""
+    def _run(mod, *argv):
+        code = mod.main([str(a) for a in argv])
+        return code, capsys.readouterr().out
+    return _run

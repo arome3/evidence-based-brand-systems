@@ -70,6 +70,10 @@ Similarity in one isolated principle is acceptable and unavoidable — hairline 
 
 If any section could reasonably be mistaken for a specific reference, name it and change it. Document the check element by element: element, nearest reference, and how this diverges.
 
+### Pass 1b — Owner's standard
+
+Put each board, and later the deck, beside the owner's own references, image to image. Does it carry the same qualities (a living imagery layer, a crafted mark, a signature device, colour used with intent, applications on real things) at the same level of craft? Where it falls short, say exactly where. A system that passes every mechanical check and still looks plainer than the references the owner gave has failed this pass.
+
 ### Pass 2 — Skeptical buyer
 
 Read as the actual audience, hostile. Which claim would they test first? What does the artifact ask them to take on faith? For a company without proof, what is *actually* being offered instead — and is it visible in the first screen?
@@ -95,7 +99,13 @@ Give it to someone who has read none of the strategy. Can they implement without
 Append the completed checklist to the design-system document. **Mark it honestly — a checklist item a reviewer can falsify does more damage than the defect it hides.** Where a claim was verified, state the method.
 
 - [ ] Every deliverable traces to the selected territory; no orphan decisions
-- [ ] Three meaningfully distinct territories considered; one selected on a scored matrix
+- [ ] Three territories that differ in kind, each shown to the owner as a rendered six-slide board
+- [ ] The owner picked (or mixed) by eye; the pick is recorded in their words
+- [ ] Every owner reference captured and looked at image by image; no summary stood in for looking
+- [ ] Imagery mode, treatment rule and sources decided; every image in `SOURCES.tsv`; stand-ins never presented as customers
+- [ ] Mark chosen from a rendered mark lab; legible at 16px; not a stock icon
+- [ ] Every board and deck slide passes `boardcheck` and was looked at after rendering
+- [ ] Any rejection has a written diagnosis before the redo
 - [ ] Unselected territories documented with reasons, and retained ideas named
 - [ ] All research fetched this engagement; nothing from memory
 - [ ] Verified / observed / interpretation labelled and never blended
@@ -110,7 +120,7 @@ Append the completed checklist to the design-system document. **Mark it honestly
 - [ ] Category and AI-cliché scan clean
 - [ ] Differentiation from each named competitor documented
 - [ ] No fabricated trust element anywhere; unearned slots deleted, not filled
-- [ ] Artifact opens with no build step and no image assets
+- [ ] Style tile opens with no build step and no image files
 - [ ] Works with webfonts blocked
 - [ ] Renders correctly at desktop and mobile; no horizontal page overflow
 - [ ] Both themes correct, in both switching directions

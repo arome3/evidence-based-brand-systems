@@ -54,11 +54,19 @@ Explicitly out of scope: their palettes, typefaces, layouts, gradients, illustra
 
 ### Track D — Taste references
 
-If the client supplies inspiration sites, review every one. These are taste signals, not templates.
+If the client supplies inspiration (sites, Behance or Dribbble projects, screenshots), capture every one with `scripts/refcapture.py` and **look at every image yourself** (Iron Law 12). If the client supplies none, ask for two to six before stage 3; a brand chosen without any taste signal is chosen against yours. These references are the owner's standard for the look: their qualities, energy and level of craft. They are not templates to copy.
+
+Look specifically for what makes them feel *made*: the imagery layer (photography, characters, 3D, illustration) and its treatment, the mark and how it is constructed, the signature device you would recognise with the logo covered, how colour is used at scale, and how the brand is shown on real things.
 
 Then do the thing that makes the exercise worth anything: **synthesise them into a named taste profile** with 2–4 genuinely shared qualities, each backed by per-site evidence. A list of ten site reviews is not a taste profile.
 
 Name conflicts between references and resolve each one deliberately. Do not average them into a middle ground — averaging is how you get a brand that looks like everyone.
+
+**Taste versus strategy.** Where a reference's *look* conflicts with a strategy fact about claims, proof, audience reach or page weight, strategy decides that fact (no invented proof, no 9 MB hero video for buyers on mobile data) and the look is kept by other means. Where the conflict is only aesthetic (restraint versus energy, photography versus none, gradient versus flat), the owner's references win.
+
+### Distinctive assets
+
+Name which assets the brand will own and repeat beside its name for years: a shape (mark, frame, crop), a colour, a character, a sound, a phrase. A new brand has no fame, so pick assets nobody in the category uses (check against Track A and B) and lead with a **shape**: shapes earn recognition faster than colours. For a product that speaks (voice assistants, phone services), sound is an asset: a fixed greeting, a confirmation phrase, a short chime that survives a phone line.
 
 ### Labelling — three classes, never blended
 
@@ -74,23 +82,21 @@ If a site blocks inspection, record the limitation precisely, use only what is a
 
 ---
 
-## 3. DIRECT — three territories, one selected
+## 3. EXPLORE — boards, then the owner picks
 
-Develop **three meaningfully different** creative territories. Minor visual variations of one idea are not three territories.
+Develop **three territories that differ in kind** (imagery mode, colour mode, mark mode), each grounded in a strategy truth and judged against the owner's references. Present each as a **rendered board of six 16:9 slides** with real imagery, a mark from the mark lab, a signature device and real applications. Full protocol: `visual-exploration.md`; imagery: `imagery.md`.
 
-Each must respond to both the product strategy and the taste profile. **Where they conflict, strategy wins, and the conflict is named.**
+For each territory, write a short block in `02-creative-direction.md`: the central idea and the strategy truth it comes from · what the mark means · the imagery mode and treatment · the signature device · which reference qualities it carries and how they were transformed · principal strength · principal risk · how it differs from each named competitor.
 
-Each territory documents: concept name · central idea · connection to the strategy documents · emotional impression · personality, verbal, colour, typography, layout, graphic-language and product-interface implications · which taste qualities it expresses · which references informed it and **how the influence was transformed** · which reference tendencies it rejects · one principal strength · one principal risk · how it avoids category clichés · how it differs from each named competitor · why it is recognisably *this client* · why it could not be mistaken for any single reference.
+**The owner decides by eye**, and may mix ("this mark with that photography"). Record the pick in their words. A scored matrix may be kept as a record of trade-offs; it says who scored it, and it never overrides the owner's choice.
 
-**Select with a scored matrix.** Score every territory against: strategy fit, truth expression, audience credibility, differentiation, memorability, taste alignment, practicality, accessibility, extensibility, product-interface compatibility, ability to communicate the product's core mechanism, fit for the company's stage, independence from competitors and references.
+Document the unselected territories with reasons, and the ideas from each that are retained inside the winner.
 
-**Weight the criteria, and never weight taste alignment above strategy fit, audience credibility, truth, differentiation, accessibility, or practicality.**
-
-Document the unselected territories with reasons — and note which idea from each is being *retained* inside the winner. Good ideas from rejected territories are usually salvageable as devices.
+If the owner rejects all three, write the rejection diagnosis (`visual-exploration.md`) before making anything new.
 
 ---
 
-## 4. SPECIFY — the visual system
+## 4. SPECIFY — the visual system for the picked board
 
 Every major decision carries this annotation:
 
@@ -119,13 +125,15 @@ Before leaving this stage, list every device named in stage 4 and point at where
 - **Style tile:** self-contained (fonts embedded as `data:` URIs), no build step, no image files, both themes, visible focus, reduced-motion respected, every specified device rendered, all specimen content visibly labelled. The wordmark and mark appear as inline SVG coloured by CSS classes that read tokens. Mark a logotype or decorative element `data-contrast-exempt="reason"`.
 - **Assets:** the wordmark, mark, icon set, avatar and share card, built with `scripts/brandassets.py`, icon colours given as token names. See `assets.md`.
 - **Scripts and fonts:** copy `brandcheck.py` and `brandassets.py` into `BRAND_DIR/scripts/`, and put each family in `BRAND_DIR/fonts/<family>/` with its own licence file; every face is checked against the licence beside it.
+- **Imagery:** the chosen mode and treatment applied to every image the system uses; every file logged in `SOURCES.tsv`, stand-ins marked as stand-ins (`imagery.md`). The style tile stays image-free; the imagery lives in the deck and the applications.
+- **Guidelines deck:** `guidelines-deck.html`, the owner-facing brand book in the board's visual language, built from the same tokens, fonts and assets, rendered to PNG, checked with `boardcheck` and looked at slide by slide.
 - **Guidelines pairing table:** put the `<!-- brandcheck:pairs:start -->` / `<!-- brandcheck:pairs:end -->` markers in `04-brand-guidelines.md` and fill them with `brandcheck contrast pairs.tsv --update 04-brand-guidelines.md`. A ratio typed into the guidelines goes stale on the next token edit; `all` fails a stale table.
 
 ---
 
 ## 6. VERIFY — mechanical, then rendered, then adversarial
 
-Run the stage 6 sequence in SKILL.md's Verify section exactly: `export`, `contrast --update`, `sheet`, then `all` (with `--strict` for a company with no public proof). `all` includes the rendered layer and the asset checks, and fails if it could not render. Then do what no command can: review `asset-sheet.html` by eye, work through the manual items in `verification.md` Layer 2, and run the adversarial review.
+Run the stage 6 sequence in SKILL.md's Verify section exactly: `export`, `contrast --update`, `sheet`, then `all` (with `--strict` for a company with no public proof). `all` includes the rendered layer and the asset checks, and fails if it could not render. Run `boardcheck` on the boards and the deck. Then do what no command can: look at every rendered slide, review `asset-sheet.html` by eye, work through the manual items in `verification.md` Layer 2, and run the adversarial review.
 
 Full protocol: `verification.md`.
 
@@ -133,7 +141,7 @@ Full protocol: `verification.md`.
 
 ## 7. GOVERN — make it usable by people who were not here
 
-Application rules, co-branding posture, trademark handling, brand architecture, localisation, and the handoff. A system a contract developer cannot implement without asking questions is not finished.
+Application rules, co-branding posture, trademark handling, brand architecture, localisation, the commissioned-imagery shoot brief that replaces every stand-in, and the handoff. A system a contract developer cannot implement without asking questions is not finished.
 
 The handoff includes the gates. Every page built from the system, the landing page first, runs the brand's forbidden claims and rendered check: `brandcheck lexicon SITE_DIR --claims BRAND_DIR/forbidden-claims.txt --strict` and `brandcheck render <served URL> --pairs BRAND_DIR/pairs.tsv`.
 

@@ -7,14 +7,14 @@
   },
   "metadata": {
     "description": "Verifiable brand systems for agent runtimes",
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
   "plugins": [
     {
       "name": "evidence-based-brand-systems",
       "source": "./",
-      "description": "Produce complete, verifiable brand systems: identity, creative direction, guidelines, generated design tokens, a working style tile, and the logo, icon and share-card assets, with a verifier that checks contrast (as rendered), token drift, font reality, asset correctness and fabricated or forbidden claims.",
-      "version": "1.2.0",
+      "description": "Produce complete, verifiable brand systems: rendered direction boards the owner chooses from, identity, creative direction, imagery, guidelines, generated design tokens, a working style tile, and the logo, icon and share-card assets, with a verifier that checks contrast (as rendered), token drift, font reality, asset correctness and fabricated or forbidden claims.",
+      "version": "1.3.0",
       "author": { "name": "Abraham Onoja" },
       "homepage": "https://github.com/arome3/evidence-based-brand-systems",
       "repository": "https://github.com/arome3/evidence-based-brand-systems",

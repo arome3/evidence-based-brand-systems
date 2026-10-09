@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>[BRAND] — Territory [X] board</title>
+<style>
+/* One territory = this file: six 16:9 slides. Render each <section class="slide"> to PNG
+   (Playwright element.screenshot), lay the three territories side by side on compare.html,
+   run `python3 scripts/boardcheck.py THIS_FILE`, then LOOK at every PNG before the owner does.
+   Fonts embedded as data: URIs (check the locale's glyphs in the binary first). Photos from
+   SOURCES.tsv. Every invented business, person, time and amount carries "Example" on the element. */
+@font-face{font-family:Display;src:url(data:font/woff2;base64,[BASE64]) format('woff2');font-weight:100 900}
+@font-face{font-family:Text;src:url(data:font/woff2;base64,[BASE64]) format('woff2');font-weight:100 900}
+:root{--lead:#______;--accent:#______;--ground:#______;--ink:#______}
+*{box-sizing:border-box;margin:0;padding:0}
+.slide{width:1600px;height:900px;position:relative;overflow:hidden;font-family:Text,sans-serif;color:var(--ink);background:var(--ground)}
+.disp{font-family:Display;font-weight:700;letter-spacing:-.03em;line-height:.95}
+.ph{position:absolute;inset:0;background-size:cover;background-position:center}
+.ex{font:600 12px/1 Text;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+.tag{position:absolute;font:500 14px/1 Text;letter-spacing:.06em;text-transform:uppercase}
+/* The signature device: the product's real output over a real moment. Restyle per territory. */
+.device{position:relative;width:420px;border-radius:20px;padding:18px 20px;background:rgba(255,255,255,.9);box-shadow:0 30px 60px -25px rgba(0,0,0,.45)}
+</style>
+</head>
+<body>
+
+<!-- 1 COVER: the hero. Real imagery + headline + mark/wordmark + the signature device. -->
+<section class="slide">
+  <div class="ph" style="background-image:url(photos/[FILE].jpg)"></div>
+  <div style="position:absolute;left:80px;top:70px"><!-- inline mark + wordmark SVG --></div>
+  <h1 class="disp" style="position:absolute;left:80px;bottom:150px;font-size:120px;width:760px">[Real proposed headline]</h1>
+  <div style="position:absolute;right:90px;bottom:90px"><div class="device">[The product's real words] <span class="ex">Example</span></div></div>
+  <span class="tag" style="right:90px;top:80px">[X] · [Territory name]</span>
+</section>
+
+<!-- 2 MARK: on its construction grid; three icon grounds; the lockup; one sentence of meaning. -->
+<section class="slide"><!-- grid + mark (left half, lead colour) · meaning, icons, lockup (right half) --></section>
+
+<!-- 3 COLOUR AND TYPE: proportion blocks (lead colour biggest); display set huge with the
+     locale's glyph (e.g. the currency sign); the reading face in a real sentence. -->
+<section class="slide"></section>
+
+<!-- 4 IMAGERY: three images in the treatment rule, each carrying the signature device. -->
+<section class="slide"></section>
+
+<!-- 5 APPLICATIONS: a poster pair (type-led + image-led) or a billboard. -->
+<section class="slide"></section>
+
+<!-- 6 PRODUCT: website hero in a browser frame + a phone (notification/app/message).
+     The stage-honesty line is visible; planned features say "planned". -->
+<section class="slide"></section>
+
+</body>
+</html>
